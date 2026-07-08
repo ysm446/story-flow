@@ -56,6 +56,18 @@ function AppShell() {
     }
   }, [])
 
+  // ウィンドウへのファイルドロップの既定動作（ファイルへのナビゲーション）を防止。
+  // 個別のドロップ対応（Vault など）は各コンポーネント側で preventDefault + 処理する
+  useEffect(() => {
+    const prevent = (event: DragEvent) => event.preventDefault()
+    window.addEventListener('dragover', prevent)
+    window.addEventListener('drop', prevent)
+    return () => {
+      window.removeEventListener('dragover', prevent)
+      window.removeEventListener('drop', prevent)
+    }
+  }, [])
+
   // バックエンドの死活監視
   useEffect(() => {
     let canceled = false

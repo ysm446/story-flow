@@ -24,9 +24,18 @@ const TAG_FIELDS: Array<{ type: TagType; label: string; placeholder: string }> =
 
 interface CardEditorProps {
   card: Card | null // null = 新規作成
+  initialFile?: File | null // グリッドへのドロップから渡される初期メディア
   onSaved: (card: Card) => void
   onDeleted: (cardId: string) => void
   onClose: () => void
+}
+
+/** DataTransfer から最初の画像/動画ファイルを取り出す */
+export function pickMediaFile(dataTransfer: DataTransfer): File | null {
+  for (const file of Array.from(dataTransfer.files)) {
+    if (file.type.startsWith('image/') || file.type.startsWith('video/')) return file
+  }
+  return null
 }
 
 function tagsToText(tags: CardTag[], tagType: TagType): string {
@@ -41,7 +50,7 @@ function textToTags(text: string, tagType: TagType): CardTag[] {
     .map((value) => ({ tag_type: tagType, value }))
 }
 
-export function CardEditor({ card, onSaved, onDeleted, onClose }: CardEditorProps) {
+export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClose }: CardEditorProps) {
   const [title, setTitle] = useState(card?.title ?? '')
   const [brief, setBrief] = useState(card?.brief ?? '')
   const [role, setRole] = useState<CardRole>(card?.role ?? 'intro')
@@ -51,7 +60,8 @@ export function CardEditor({ card, onSaved, onDeleted, onClose }: CardEditorProp
     time: tagsToText(card?.tags ?? [], 'time'),
     mood: tagsToText(card?.tags ?? [], 'mood')
   })
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(initialFile)
+  const [isDragOver, setIsDragOver] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [similar, setSimilar] = useState<Card[] | null>(null)
@@ -69,9 +79,10 @@ export function CardEditor({ card, onSaved, onDeleted, onClose }: CardEditorProp
       time: tagsToText(card?.tags ?? [], 'time'),
       mood: tagsToText(card?.tags ?? [], 'mood')
     })
-    setPendingFile(null)
+    setPendingFile(initialFile ?? null)
     setSimilar(null)
     setError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card?.id])
 
   const buildInput = (): CardInput => ({
@@ -156,21 +167,36 @@ export function CardEditor({ card, onSaved, onDeleted, onClose }: CardEditorProp
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        {/* メディア */}
+        {/* メディア（クリックで選択 / ドラッグ&ドロップ対応） */}
         <div>
           <div
-            className="flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-canvas)]"
+            className={`flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-[var(--bg-canvas)] ${
+              isDragOver ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--border)]'
+            }`}
             onClick={() => fileInputRef.current?.click()}
-            title="クリックしてメディアを選択"
+            onDragOver={(event) => {
+              event.preventDefault()
+              setIsDragOver(true)
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(event) => {
+              event.preventDefault()
+              setIsDragOver(false)
+              const file = pickMediaFile(event.dataTransfer)
+              if (file) setPendingFile(file)
+            }}
+            title="クリックして選択、またはファイルをドロップ"
           >
-            {previewUrl ? (
+            {isDragOver ? (
+              <span className="pointer-events-none text-[13px] text-[var(--text)]">ここにドロップ</span>
+            ) : previewUrl ? (
               pendingFile?.type.startsWith('video') || (!pendingFile && card?.media_type === 'video') ? (
                 <span className="text-[13px] text-[var(--text-dim)]">動画: {pendingFile?.name ?? card?.media_path}</span>
               ) : (
-                <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+                <img src={previewUrl} alt="" className="pointer-events-none h-full w-full object-cover" />
               )
             ) : (
-              <span className="text-[13px] text-[var(--text-faint)]">クリックして画像/動画を追加</span>
+              <span className="text-[13px] text-[var(--text-faint)]">クリックして選択、またはドロップで追加</span>
             )}
           </div>
           <input

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, cardFileUrl, type Card, type CardRole, type VaultStats } from '../../lib/api'
-import { CardEditor } from './CardEditor'
+import { CardEditor, pickMediaFile } from './CardEditor'
 
 const ROLE_LABELS: Record<CardRole, string> = {
   intro: '導入',
@@ -30,6 +30,8 @@ export function VaultPhase() {
   const [searchMode, setSearchMode] = useState<SearchMode>('keyword')
   const [roleFilter, setRoleFilter] = useState<CardRole | ''>('')
   const [editing, setEditing] = useState<Card | 'new' | null>(null)
+  const [droppedFile, setDroppedFile] = useState<File | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadStats = useCallback(async () => {
@@ -65,12 +67,14 @@ export function VaultPhase() {
 
   const handleSaved = (saved: Card) => {
     setEditing(saved)
+    setDroppedFile(null)
     void loadCards()
     void loadStats()
   }
 
   const handleDeleted = () => {
     setEditing(null)
+    setDroppedFile(null)
     void loadCards()
     void loadStats()
   }
@@ -80,7 +84,34 @@ export function VaultPhase() {
 
   return (
     <div className="flex h-full">
-      <div className="min-w-0 flex-1 overflow-y-auto">
+      {/* 画像/動画をドロップすると、それをメディアにした新規カードの作成を開く */}
+      <div
+        className="relative min-w-0 flex-1 overflow-y-auto"
+        onDragOver={(event) => {
+          if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+            event.preventDefault()
+            setIsDragOver(true)
+          }
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget === event.target) setIsDragOver(false)
+        }}
+        onDrop={(event) => {
+          event.preventDefault()
+          setIsDragOver(false)
+          const file = pickMediaFile(event.dataTransfer)
+          if (!file) return
+          setDroppedFile(file)
+          setEditing('new')
+        }}
+      >
+        {isDragOver && (
+          <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-[var(--accent)] bg-[var(--accent-soft)]">
+            <span className="rounded bg-[var(--bg-sidebar)] px-4 py-2 text-[14px]">
+              ドロップして新規カードを作成
+            </span>
+          </div>
+        )}
         <div className="mx-auto max-w-5xl px-6 py-6">
           {/* ツールバー */}
           <div className="flex flex-wrap items-center gap-2">
@@ -239,10 +270,15 @@ export function VaultPhase() {
 
       {editing !== null && (
         <CardEditor
+          key={editing === 'new' ? `new-${droppedFile?.name ?? ''}-${droppedFile?.lastModified ?? 0}` : editing.id}
           card={editing === 'new' ? null : editing}
+          initialFile={editing === 'new' ? droppedFile : null}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null)
+            setDroppedFile(null)
+          }}
         />
       )}
     </div>
