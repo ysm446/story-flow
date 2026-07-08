@@ -11,7 +11,7 @@
 
 - フロント: Electron + React + TypeScript + React Flow（Compose 画面）
 - バックエンド: FastAPI（Python）+ SQLite（sqlite-vec / FTS5）
-- LLM: llama.cpp の OpenAI 互換 API。埋め込みは Ruri（日本語）
+- LLM: llama.cpp の OpenAI 互換 API。埋め込みは Qwen3-Embedding-4B（GGUF / llama-server `--embedding`）
 
 仕様の正は [docs/spec.md](docs/spec.md)。データは `Vault → Compose → Generate → Theater` の
 4 フェーズを一方向に流れる。

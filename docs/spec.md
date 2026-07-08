@@ -1,7 +1,7 @@
 # story-flow — 仕様書 (spec.md)
 
 作成日時: 2026-07-08 16:27
-更新日時: 2026-07-08 16:50
+更新日時: 2026-07-08 17:02
 
 短編ストーリー生成・鑑賞アプリ。作者が事前に「シーンカード」を大量に用意し、
 始点・終点（と任意の中間点）を置くと、ローカル LLM が在庫カードから間を埋め、
@@ -67,7 +67,7 @@
 ### 判断: 穴埋めは「候補検索 → LLM 選択」の二段
 
 - 全在庫を LLM に見せない。ベクトル検索 + ロールで **k 件（5〜8）に絞ってから** LLM に 1 枚選ばせる。
-- 既存アプリのハイブリッド検索（sqlite-vec + FTS5 + Ruri）をそのまま流用する。新規部品なし。
+- 既存アプリのハイブリッド検索（sqlite-vec + FTS5 + Qwen3-Embedding）をそのまま流用する。新規部品なし。
 - 穴が連続するときは、まとめてではなく**左から 1 枚ずつ確定**し、選んだカードを直前カードに
   繰り込んでから次の 1 枚を選ぶ。選択と清書を同じ逐次ループに乗せる（下記 §6）。
 
@@ -102,7 +102,9 @@
   - writer（清書）と selector（カード選択）で**エンドポイント/モデルを分けられる**設定にする
     （`news-desk` の dual-port と同じ発想）。selector は推論寄りモデルでもよい。
   - Ornith 系推論モデルを使う場合は `<think>...</think>` ブロックを剥がすパーサを噛ませる。
-- **埋め込み**: Ruri（日本語最適化）。ブリーフに対して計算。
+- **埋め込み**: Qwen3-Embedding-4B（`models/Qwen3-Embedding-4B-GGUF/` の GGUF、配置済み）。
+  llama-server を `--embedding` で起動し、OpenAI 互換 `/v1/embeddings` を HTTP で叩く
+  （`image-assistant` の `embedding_client.py` と同方式・同モデル）。ブリーフに対して計算。
 - **ストレージ/検索**: SQLite + sqlite-vec（ベクトル）+ FTS5（全文）。
 - **メディア**: 画像・短尺動画をディスク保存し、DB にはパスのみ持つ。
   - ライブラリルート（DB + メディア + サムネイル）は当面 `data/library/` に置く。
@@ -154,7 +156,7 @@ CREATE TABLE card_tags (
 ```sql
 CREATE VIRTUAL TABLE card_vec USING vec0(
   card_id TEXT PRIMARY KEY,
-  embedding FLOAT[<RURI_DIM>]            -- ブリーフから計算。次元は Ruri のモデルに合わせる
+  embedding FLOAT[<EMBED_DIM>]           -- ブリーフから計算。次元は Qwen3-Embedding-4B に合わせる
 );
 ```
 
@@ -475,7 +477,9 @@ story-flow/
 
 ## 14. 未決事項（実装前に埋める定数・判断）
 
-- `RURI_DIM`（Ruri のモデル次元）と埋め込みサービスの呼び出し方式（HTTP か subprocess か）。
+- ~~埋め込みモデルと呼び出し方式~~ → **決定（2026-07-08）**: Qwen3-Embedding-4B（GGUF）を
+  llama-server subprocess + HTTP（`/v1/embeddings`）で使う。`EMBED_DIM` は 2560 想定、
+  実装時に `/v1/embeddings` の返り値で実測確認する。
 - `CANDIDATE_K` の既定値（暫定 6）。
 - `StoryState` 各リストの上限件数。
 - 中間ノードの許容枚数の上限。

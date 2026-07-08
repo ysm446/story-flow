@@ -1,7 +1,7 @@
 # plan.md — 実装方針と作業計画
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-08 16:50
+更新日時: 2026-07-08 17:02
 
 仕様の詳細と確定判断は [docs/spec.md](../spec.md) を正とする。
 本ファイルは「どの順で・何を流用して」作るかの作業計画。
@@ -12,7 +12,8 @@
 - バックエンド: FastAPI（Python）。
 - LLM 推論: llama.cpp の OpenAI 互換エンドポイント（既定 Qwen 系 instruct）。
   writer / selector はエンドポイント・モデルを分離可能にする。
-- 埋め込み: Ruri（日本語最適化）。**ブリーフに対してのみ**計算。
+- 埋め込み: Qwen3-Embedding-4B（GGUF、`models/Qwen3-Embedding-4B-GGUF/` に配置済み。
+  2026-07-08 決定）。llama-server `--embedding` + `/v1/embeddings`。**ブリーフに対してのみ**計算。
 - ストレージ/検索: SQLite + sqlite-vec + FTS5。メディアはディスク保存、DB にはパスのみ。
 - 実行環境（2026-07-08 決定）:
   - llama-server は `runtime/` に配置し、**アプリ UI 内のインストーラ**でダウンロード・導入する。
@@ -65,8 +66,9 @@ Compose から作ると楽しくて沼るが、生成が動かないうちは空
     ただしベクトル側は image-assistant の「BLOB + Python 総当たり」ではなく
     **sqlite-vec（spec §3 で確定）**を使う。
   - 埋め込みは「llama-server を `--embedding` で subprocess 起動 + OpenAI 互換
-    `/v1/embeddings` を HTTP で叩く」疎結合構成（`embedding_client.py`）が参考になる。
-    Ruri を同方式で立てられるか確認し、`backend/services/embedding.py` に隠蔽する。
+    `/v1/embeddings` を HTTP で叩く」方式（`embedding_client.py`）を**そのまま採用**。
+    モデルも image-assistant と同じ Qwen3-Embedding-4B（配置済み）なので、
+    `embedding_client.py` をほぼそのまま `backend/services/embedding.py` に移植できる。
 - UI: 一覧グリッド（`image-assistant/frontend/image-library.js` の無限スクロール +
   遅延サムネ読み込みの構造を参考）、登録フォーム、在庫密度パネル（ロール別枚数）。
 
@@ -118,7 +120,8 @@ UI の質感・寸法は [docs/rules/electron-design-rules.md](../rules/electron
 
 ## 未決事項（spec §14。実装前にここで確定させて記録する）
 
-- [ ] `RURI_DIM`（Ruri のモデル次元）と埋め込みサービスの呼び出し方式（HTTP か subprocess か）
+- [x] 埋め込みモデル・呼び出し方式 → **Qwen3-Embedding-4B（GGUF）** を llama-server
+  subprocess + HTTP で使う（2026-07-08 決定）。`EMBED_DIM` は 2560 想定、実装時に実測確認
 - [ ] `CANDIDATE_K` の既定値（暫定 6）
 - [ ] `StoryState` 各リストの上限件数
 - [ ] 中間ノードの許容枚数の上限

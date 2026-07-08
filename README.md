@@ -25,7 +25,7 @@
 - **フロント**: Electron + React + TypeScript + React Flow（`lm-graph` をフォーク）
 - **バックエンド**: FastAPI（Python / venv）
 - **LLM**: llama.cpp（OpenAI 互換 API）。llama-server は `runtime/` にアプリ内インストーラで導入
-- **埋め込み**: Ruri（日本語最適化）
+- **埋め込み**: Qwen3-Embedding-4B（GGUF / llama-server の `/v1/embeddings`）
 - **ストレージ**: SQLite + sqlite-vec（ベクトル検索）+ FTS5（全文検索）
 
 ## ディレクトリ
