@@ -7,12 +7,13 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { IconFilm, IconRotate, IconTrash } from '../../components/icons'
+import { IconFilm, IconGrid, IconRotate, IconTrash } from '../../components/icons'
 import { api, cardFileUrl, type Card, type GenerateEvent, type StorySummary } from '../../lib/api'
 import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
@@ -40,6 +41,9 @@ interface SceneNodeData {
   onRegenerate: (index: number, mode: RegenMode) => void
 }
 
+// ノードの横方向の最小間隔（ノード幅 300 + 余白）。重なり緩和の基準
+const NODE_GAP_X = 360
+
 const STATUS_LABELS: Record<SceneStatus, string | null> = {
   pending: null,
   streaming: '清書中…',
@@ -64,11 +68,11 @@ function SceneNode({ data }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-[var(--accent)]" />
       {card?.media_path && (
-        <div className="relative h-[92px] overflow-hidden bg-[var(--bg-canvas)]">
+        <div className="relative overflow-hidden bg-[var(--bg-canvas)]">
           <img
             src={cardFileUrl(card.id, true)}
             alt=""
-            className="h-full w-full object-cover"
+            className="block h-auto w-full"
             draggable={false}
             onError={(event) => {
               event.currentTarget.style.visibility = 'hidden'
@@ -162,6 +166,7 @@ function GenerateInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const autoStarted = useRef(false)
+  const reactFlow = useReactFlow()
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
   const isRunning = status === 'starting-model' || status === 'generating'
@@ -338,19 +343,34 @@ function GenerateInner() {
     }
   }
 
+  // ノードの配置（重なり緩和）: Compose の座標を基準にしつつ、チェーン順に x 方向の
+  // 最小間隔（NODE_GAP_X）を確保する。y は Compose の値を活かす。
+  const computeLayout = useCallback(
+    (count: number) => {
+      const bases = Array.from({ length: count }, (_, i) => {
+        const composeNode = composeNodes.find((item) => item.id === sceneViews[i]?.cardId)
+        return composeNode ? { ...composeNode.position } : { x: 60 + i * NODE_GAP_X, y: 120 }
+      })
+      for (let i = 1; i < bases.length; i++) {
+        if (bases[i].x < bases[i - 1].x + NODE_GAP_X) bases[i].x = bases[i - 1].x + NODE_GAP_X
+      }
+      return bases
+    },
+    [composeNodes, sceneViews]
+  )
+
   // シーンの内容（ストリーミング）を既存ノードへ流し込む。position と React Flow が
   // 付与した measured（測定済みサイズ）は既存ノードから引き継ぐ。ノードを毎回作り直すと
   // measured が失われ、ドラッグ中に「未測定 → 一瞬透明」のちらつきが出るため。
-  // 配置優先順: 既存（ドラッグ後）> Compose のカード位置 > 横一列
+  // 配置優先順: 既存（ドラッグ後）> 重なり緩和レイアウト
   useEffect(() => {
+    const layout = computeLayout(sceneViews.length)
     setNodes((prev) => {
       const prevById = new Map(prev.map((node) => [node.id, node]))
       return sceneViews.map((scene, index) => {
         const id = `scene-${index}`
         const existing = prevById.get(id)
-        const composeNode = composeNodes.find((item) => item.id === scene.cardId)
-        const position =
-          existing?.position ?? (composeNode ? { ...composeNode.position } : { x: 60 + index * 340, y: 160 })
+        const position = existing?.position ?? layout[index]
         return {
           ...existing,
           id,
@@ -368,7 +388,14 @@ function GenerateInner() {
       })
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, cardById])
+  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, cardById, computeLayout])
+
+  // 「整列」: ドラッグでの位置上書きを捨て、重なり緩和レイアウトに並べ直す
+  const handleAlign = useCallback(() => {
+    const layout = computeLayout(sceneViews.length)
+    setNodes((prev) => prev.map((node, index) => ({ ...node, position: layout[index] ?? node.position })))
+    window.setTimeout(() => reactFlow.fitView({ padding: 0.2, duration: 300 }), 0)
+  }, [computeLayout, sceneViews.length, setNodes, reactFlow])
 
   // エッジは一本鎖。シーン数が変わったときだけ組み直す
   useEffect(() => {
@@ -487,6 +514,16 @@ function GenerateInner() {
         >
           <Background gap={20} />
         </ReactFlow>
+        {sceneViews.length > 0 && (
+          <button
+            onClick={handleAlign}
+            title="ノードを重ならないように整列する"
+            className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-[var(--border-strong)] bg-[var(--bg-sidebar)]/95 px-2.5 py-1.5 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+          >
+            <IconGrid size={13} />
+            整列
+          </button>
+        )}
         {sceneViews.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[13px] text-[var(--text-faint)]">
             Compose で構成を組んで「生成する」を押すと、ここでノードに清書文が流れ込みます。

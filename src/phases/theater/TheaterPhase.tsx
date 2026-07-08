@@ -26,11 +26,13 @@ const VIDEO_CROSSFADE_SECONDS = 1.0
 function CrossfadeLoopVideo({
   src,
   fadeSeconds = VIDEO_CROSSFADE_SECONDS,
-  fitClass = 'object-cover'
+  fitClass = 'object-cover',
+  paused = false
 }: {
   src: string
   fadeSeconds?: number
   fitClass?: string
+  paused?: boolean
 }) {
   const videoARef = useRef<HTMLVideoElement>(null)
   const videoBRef = useRef<HTMLVideoElement>(null)
@@ -38,6 +40,18 @@ function CrossfadeLoopVideo({
   const switching = useRef(false)
 
   const refOf = (index: number) => (index === 0 ? videoARef : videoBRef)
+
+  // 一時停止に追従: 停止中は両方止める。再開時はアクティブな側だけ再生する
+  useEffect(() => {
+    const first = videoARef.current
+    const second = videoBRef.current
+    if (paused) {
+      first?.pause()
+      second?.pause()
+    } else {
+      void refOf(activeIndex.current).current?.play().catch(() => undefined)
+    }
+  }, [paused])
 
   useEffect(() => {
     activeIndex.current = 0
@@ -49,7 +63,7 @@ function CrossfadeLoopVideo({
       first.style.opacity = '1'
       first.style.zIndex = '2'
       first.currentTime = 0
-      void first.play().catch(() => undefined)
+      if (!paused) void first.play().catch(() => undefined)
     }
     if (second) {
       second.style.transition = 'none'
@@ -128,6 +142,28 @@ function CrossfadeLoopVideo({
   )
 }
 
+/** 通常ループ動画（クロスディゾルブ無効時）。一時停止に追従する */
+function LoopVideo({ src, fitClass, paused }: { src: string; fitClass: string; paused: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (paused) video.pause()
+    else void video.play().catch(() => undefined)
+  }, [paused])
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      autoPlay
+      muted
+      loop
+      playsInline
+      className={`h-full w-full ${fitClass}`}
+    />
+  )
+}
+
 const TONE_LABELS: Record<string, string> = {
   happy: 'ハッピー',
   bad: 'バッド',
@@ -140,13 +176,13 @@ function sceneDurationMs(prose: string): number {
   return Math.min(30_000, Math.max(5_000, 4_000 + prose.length * 90))
 }
 
-// 縦横比の設定値 → CSS aspect-ratio 値（auto は null = ウィンドウに合わせる）
-const ASPECT_RATIO_CSS: Record<string, string | null> = {
+// 縦横比の設定値 → 数値（幅 / 高さ）。auto は null = ウィンドウに合わせる
+const ASPECT_RATIO_NUM: Record<string, number | null> = {
   auto: null,
-  '16:9': '16 / 9',
-  '4:3': '4 / 3',
-  '3:2': '3 / 2',
-  '1:1': '1 / 1'
+  '16:9': 16 / 9,
+  '4:3': 4 / 3,
+  '3:2': 3 / 2,
+  '1:1': 1
 }
 
 /**
@@ -330,6 +366,20 @@ function StoryPlayer({
   const [visibleChars, setVisibleChars] = useState(0)
   const textRef = useRef<HTMLDivElement>(null)
 
+  // ステージの縦横比を正確に反映するため、コンテナ実寸を測って px でサイズを決める
+  // （CSS の aspect-ratio + width% では横長コンテナで幅が縮まず 4:3 が崩れて上下が切れる）
+  const stageOuterRef = useRef<HTMLDivElement>(null)
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = stageOuterRef.current
+    if (!el) return
+    const update = () => setContainerSize({ w: el.clientWidth, h: el.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   const scene = scenes[index]
   const isStreaming = uiSettings.theaterTextStreaming
   const streamMsPerChar = uiSettings.theaterTextStreamMsPerChar
@@ -426,22 +476,27 @@ function StoryPlayer({
     return () => clearTimeout(timer)
   }, [controlsVisible, index])
 
-  // ステージの形: 縦横比 auto はウィンドウ形（現状どおり）。比率指定時はその額縁を
-  // コンテナに収まる最大サイズ（× スケール）で中央に置く。object-fit で切れる/余白が決まる
-  const aspectCss = ASPECT_RATIO_CSS[uiSettings.theaterAspectRatio] ?? null
-  const stageStyle: CSSProperties =
-    aspectCss === null
-      ? { width: `${uiSettings.theaterStageScale}%`, height: `${uiSettings.theaterStageScale}%` }
-      : {
-          aspectRatio: aspectCss,
-          width: `${uiSettings.theaterStageScale}%`,
-          maxWidth: `${uiSettings.theaterStageScale}%`,
-          maxHeight: `${uiSettings.theaterStageScale}%`
-        }
+  // ステージの形: 縦横比 auto はコンテナ形（× スケール）。比率指定時はその比率の額縁を
+  // コンテナ（× スケール）に収まる最大サイズで中央に置く。object-fit で切れる/余白が決まる
+  const aspectRatio = ASPECT_RATIO_NUM[uiSettings.theaterAspectRatio] ?? null
+  const scale = uiSettings.theaterStageScale / 100
+  const availW = containerSize.w * scale
+  const availH = containerSize.h * scale
+  let stageStyle: CSSProperties
+  if (aspectRatio === null) {
+    stageStyle = { width: availW, height: availH }
+  } else {
+    // 比率を保ったまま avail に収める（width = min(availW, availH * ratio)）
+    const width = Math.min(availW, availH * aspectRatio)
+    stageStyle = { width, height: width / aspectRatio }
+  }
   const fitClass = uiSettings.theaterFitMode === 'contain' ? 'object-contain' : 'object-cover'
 
   return (
-    <div className="flex h-full items-center justify-center overflow-hidden bg-black">
+    <div
+      ref={stageOuterRef}
+      className="flex h-full items-center justify-center overflow-hidden bg-black"
+    >
       <div
         className="relative overflow-hidden bg-black"
         style={stageStyle}
@@ -462,22 +517,17 @@ function StoryPlayer({
                     src={cardFileUrl(card.id, false)}
                     fadeSeconds={uiSettings.theaterVideoCrossfadeSeconds}
                     fitClass={fitClass}
+                    paused={paused}
                   />
                 ) : (
-                  <video
-                    src={cardFileUrl(card.id, false)}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className={`h-full w-full ${fitClass}`}
-                  />
+                  <LoopVideo src={cardFileUrl(card.id, false)} fitClass={fitClass} paused={paused} />
                 ))
               ) : (
                 <img
                   src={cardFileUrl(card.id, false)}
                   alt=""
                   className={`h-full w-full ${fitClass} ${isActive ? `kenburns-${i % 4}` : ''}`}
+                  style={{ animationPlayState: paused ? 'paused' : 'running' }}
                 />
               )
             ) : (

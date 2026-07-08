@@ -297,6 +297,17 @@ Vault → Compose → Generate → Theater が一本つながった。
   - 中央: ノードネットワーク（上）+ 下部にアセットエリア（未配置カードを横並び、
     クリックで配置）。旧 左サイドのカードパレットはアセットエリアへ移動
   - icons.tsx に IconMore（横三点）を追加
+- 2026-07-09: Generate ノードのサムネイルを元の縦横比で表示（固定高さ + object-cover を
+  やめ w-full h-auto に。サムネは元から比率保持で生成されており切れは CSS 起因だった）
+- 2026-07-09: Generate ノードの重なり緩和レイアウト（作者要望）— Compose 座標を基準に
+  チェーン順で x 方向の最小間隔（360px）を確保。生成時に自動適用。キャンバス右上に
+  「整列」ボタン（ドラッグ上書きを捨てて並べ直し + fitView）。icons.tsx に IconGrid 追加
+- 2026-07-09: 修正 — Theater の縦横比（4:3 等）でまた上下が切れていた。CSS の
+  aspect-ratio + width% は横長コンテナで幅が縮まず比率が崩れるのが原因。コンテナ実寸を
+  ResizeObserver で測り、比率を保った px サイズをステージに設定する方式に変更（両向き対応）
+- 2026-07-09: Theater でクリック一時停止時に背景も止める（作者要望）— Ken Burns は
+  animationPlayState、動画は paused に追従（CrossfadeLoopVideo に paused prop、通常ループは
+  LoopVideo コンポーネント化）。再開時はアクティブな動画だけ再生
 - 2026-07-09: Compose のミニマップをテーマ調整（ノード選択色/マスク/枠/角丸/影）。
   左サイド幅・右サイド幅・アセットエリア高さをドラッグでリサイズ可能に（pointer events、
   共通 startResize ヘルパー。左 180〜480 / 右 220〜520 / 高さ 90〜400 でクランプ。
