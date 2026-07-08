@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/GitHub/lm-graph/src/renderer/src/**)",
+      "Read(//d/GitHub/lm-graph/src/main/**)"
+    ]
+  }
+}

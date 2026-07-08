@@ -1,0 +1,31 @@
+# Node
+node_modules/
+out/
+dist/
+*.tsbuildinfo
+
+# Python (venv)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ローカル実行環境（アプリ内インストーラで runtime/ に導入する）
+runtime/
+
+# GGUF モデル（大容量のためコミットしない）
+models/
+
+# ユーザーデータ（ライブラリ: DB + メディア + サムネイル）
+data/
+*.sqlite3
+*.db
+
+# ログ・環境
+*.log
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store
