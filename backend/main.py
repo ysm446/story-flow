@@ -8,16 +8,21 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from backend.db.database import init_db
-from backend.routes import cards, generate, prompts, stories, workspaces
+from backend.db.database import LibraryNotOpen, open_library, resolve_initial_library_root
+from backend.routes import cards, generate, library, prompts, stories, workspaces
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_db()
+    # 前回のライブラリ（settings.json）→ 旧既定 data/library の順に解決。
+    # どちらも無ければ未オープンのまま起動し、UI がライブラリピッカーを出す
+    initial_root = resolve_initial_library_root()
+    if initial_root is not None:
+        open_library(initial_root, persist=False)
     yield
 
 
@@ -33,9 +38,15 @@ app.add_middleware(
 
 app.include_router(cards.router)
 app.include_router(generate.router)
+app.include_router(library.router)
 app.include_router(prompts.router)
 app.include_router(stories.router)
 app.include_router(workspaces.router)
+
+
+@app.exception_handler(LibraryNotOpen)
+async def library_not_open_handler(_request: Request, _exc: LibraryNotOpen) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "library not open"})
 
 
 @app.get("/health")

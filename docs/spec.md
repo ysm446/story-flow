@@ -1,7 +1,7 @@
 # story-flow — 仕様書 (spec.md)
 
 作成日時: 2026-07-08 16:27
-更新日時: 2026-07-09 04:58
+更新日時: 2026-07-09 05:26
 
 短編ストーリー生成・鑑賞アプリ。作者が事前に「シーンカード」を大量に用意し、
 始点・終点（と任意の中間点）を置くと、ローカル LLM が在庫カードから間を埋め、
@@ -107,8 +107,11 @@
   （`image-assistant` の `embedding_client.py` と同方式・同モデル）。ブリーフに対して計算。
 - **ストレージ/検索**: SQLite + sqlite-vec（ベクトル）+ FTS5（全文）。
 - **メディア**: 画像・短尺動画をディスク保存し、DB にはパスのみ持つ。
-  - ライブラリルート（DB + メディア + サムネイル）は当面 `data/library/` に置く。
-    のちに設定で外部フォルダを参照できるよう、DB のパスは**ライブラリルート相対**で保持する。
+  - **ライブラリ = 作品バンドルフォルダ**（2026-07-09 実装）: DB + `media/` + `thumbs/` +
+    `prompts.json` を 1 フォルダにまとめ、任意の場所（外部ドライブ可）に置ける。
+    起動時 UI で「新規作成 / ライブラリを開く」。開いている場所はマシン設定
+    （`data/settings.json` の `library_root`）に永続化。DB のパスは**ライブラリルート相対**。
+    UI 環境設定（settings.json）はライブラリに含めない（マシン固有のため）。
 - **方針**: ML コンポーネントは再実装せず、subprocess / HTTP でラップする。
 
 ---
@@ -477,10 +480,12 @@ story-flow/
       writer.md
       selector.md
   data/
-    library/                 # ライブラリルート（コミットしない。設定で外部フォルダへ変更可能にする予定）
-      story-flow.sqlite3     # DB 本体
-      media/                 # メディア原本
-      thumbs/                # サムネイル
+    settings.json            # マシン設定（UI 環境設定 + library_root。コミットしない）
+  <ライブラリフォルダ>        # 任意の場所（UI で新規作成/切り替え。丸ごとコピー・共有可）
+    story-flow.sqlite3       # DB 本体（cards / workspaces / stories / ...）
+    media/                   # メディア原本
+    thumbs/                  # サムネイル
+    prompts.json             # プロンプトプリセット
   models/                    # GGUF モデル置き場（コミットしない）
   runtime/                   # llama-server 実行環境。UI のインストーラで導入（コミットしない）
   spec.md

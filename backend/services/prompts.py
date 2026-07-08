@@ -4,7 +4,7 @@
 複数管理する（追加・編集・削除・アクティブ切替）。
 
 - 既定プロンプト: backend/prompts/{kind}.md（読み取り専用。削除・編集不可）
-- ユーザープリセット: data/prompts/presets.json に保存
+- ユーザープリセット: ライブラリルートの prompts.json に保存（作品と一緒に持ち運べる）
 - アクティブが未設定（None）なら既定を使う
 - 出力形式（JSON スキーマ）の指示は編集対象から分離し、writer.py 側で必ず付与する
 """
@@ -16,12 +16,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from backend.db.database import get_library_root
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DIR = Path(__file__).resolve().parents[1] / "prompts"
-_OVERRIDE_DIR = _REPO_ROOT / "data" / "prompts"
-_STORE_PATH = _OVERRIDE_DIR / "presets.json"
+_LEGACY_STORE_PATH = _REPO_ROOT / "data" / "prompts" / "presets.json"
 
 PROMPT_KINDS = ("writer", "selector")
+
+
+def _store_path() -> Path:
+    return get_library_root() / "prompts.json"
 
 
 class PresetNotFound(KeyError):
@@ -45,44 +50,39 @@ def _empty_store() -> dict:
     return {kind: {"active_id": None, "presets": []} for kind in PROMPT_KINDS}
 
 
+def _read_store_file(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def _load_store() -> dict:
     store = _empty_store()
-    if _STORE_PATH.exists():
-        try:
-            loaded = json.loads(_STORE_PATH.read_text(encoding="utf-8"))
+    loaded = _read_store_file(_store_path())
+    if loaded is None:
+        # 旧保存先（repo の data/prompts/presets.json）からの移行
+        legacy = _read_store_file(_LEGACY_STORE_PATH)
+        if legacy is not None:
+            loaded = legacy
             for kind in PROMPT_KINDS:
                 if isinstance(loaded.get(kind), dict):
                     store[kind]["active_id"] = loaded[kind].get("active_id")
                     store[kind]["presets"] = list(loaded[kind].get("presets") or [])
-        except (json.JSONDecodeError, OSError):
-            pass  # 壊れていたら空から（既定プロンプトは常に使える）
-    _migrate_legacy_override(store)
+            _save_store(store)
+            return store
+    if loaded is not None:
+        for kind in PROMPT_KINDS:
+            if isinstance(loaded.get(kind), dict):
+                store[kind]["active_id"] = loaded[kind].get("active_id")
+                store[kind]["presets"] = list(loaded[kind].get("presets") or [])
     return store
 
 
 def _save_store(store: dict) -> None:
-    _OVERRIDE_DIR.mkdir(parents=True, exist_ok=True)
-    _STORE_PATH.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-
-
-def _migrate_legacy_override(store: dict) -> None:
-    """旧仕様（単一上書き data/prompts/{kind}.md）をプリセットとして取り込む。"""
-    for kind in PROMPT_KINDS:
-        legacy = _OVERRIDE_DIR / f"{kind}.md"
-        if not legacy.exists():
-            continue
-        content = legacy.read_text(encoding="utf-8")
-        preset = {
-            "id": str(uuid.uuid4()),
-            "name": "カスタム（旧上書き）",
-            "content": content,
-            "created_at": _now(),
-            "updated_at": _now(),
-        }
-        store[kind]["presets"].append(preset)
-        store[kind]["active_id"] = preset["id"]
-        legacy.rename(legacy.with_suffix(".md.migrated"))
-        _save_store(store)
+    _store_path().write_text(
+        json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
+    )
 
 
 def get_prompt_config(kind: str) -> dict:

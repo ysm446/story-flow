@@ -72,8 +72,8 @@ story-flow/
     routes/    {cards,generate,stories}.py
     services/  {embedding,llm,pipeline,selection,writer,state}.py
     prompts/   {writer,selector}.md   # 既定プロンプト。ユーザー編集値が優先（UI から編集可能）
-  data/
-    library/                 # ライブラリルート: story-flow.sqlite3 + media/ + thumbs/（コミットしない）
+  data/settings.json         # マシン設定（UI 設定 + library_root。コミットしない）
+  <ライブラリフォルダ>        # 任意の場所。story-flow.sqlite3 + media/ + thumbs/ + prompts.json
   models/                    # GGUF モデル置き場（コミットしない）
   runtime/                   # llama-server 実行環境。UI のインストーラで導入（コミットしない）
   .venv/                     # Python venv（コミットしない）
@@ -84,8 +84,9 @@ story-flow/
 - llama-server は `runtime/` に配置。導入はアプリ UI のインストーラから行う
   （lm-graph の `llamaInstaller.ts` / `llamaServer.ts` を流用。管理は Electron main 側）。
 - GGUF モデルは `models/` に置き、UI で列挙・選択する。
-- ライブラリ（DB + メディア + サムネイル）は当面 `data/library/` に置く。のちに設定で
-  外部フォルダを参照できるようにするため、DB のパスは常にライブラリルート相対で保持する。
+- ライブラリ（DB + メディア + サムネイル + プロンプト）は**任意のフォルダ**に置ける
+  （起動 UI で新規作成/切り替え。場所は data/settings.json の library_root に永続化）。
+  DB のパスは常にライブラリルート相対で保持する。UI 環境設定はライブラリに含めない。
 - 生成用 system prompt（writer / selector）はユーザーが UI から編集できるようにする。
   `backend/prompts/*.md` は既定値。出力形式（JSON スキーマ）指示は編集対象から分離する。
 

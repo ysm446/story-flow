@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 05:13
+更新日時: 2026-07-09 05:26
 
 ## 現在地
 
@@ -237,6 +237,18 @@ Vault → Compose → Generate → Theater が一本つながった。
 - 2026-07-09: UI 設定の保存先を localStorage から **data/settings.json** に変更（作者要望）。
   読み書きは Electron main（uiSettings:load/save IPC）。旧 localStorage の値は初回起動時に
   自動移行して削除
+
+- 2026-07-09: **ライブラリの外部フォルダ化 + 起動 UI**（作者要望。spec §3/§11 更新）:
+  - ライブラリ = 作品バンドル（DB + media + thumbs + prompts.json）を任意の場所に置ける。
+    プロンプトプリセットもライブラリ内へ移動（旧 data/prompts から自動移行）
+  - backend: ルートを動的化（未設定は「未オープン」503）。GET /library、POST /library/open
+    （open = 既存必須 / create = 新規作成）。場所は data/settings.json の library_root に永続化。
+    旧 data/library は DB があれば自動で開く（後方互換）
+  - UI: 未オープン時は起動直後にライブラリピッカー（新規作成 / 開く、Electron のフォルダ
+    選択ダイアログ）。設定パネルからも切り替え可。切替後はリロードで全画面が新ライブラリに
+  - 検証: E:\sample files\story-flow\sample への新規作成 → 空 stats → プロンプト移行 →
+    存在しないパスの open 404 → settings 永続化 → 旧ライブラリへ復帰（カード 6 枚）まで
+    TestClient で E2E 確認。リポジトリの data/ は settings.json のみが今後の正
 
 ## 未完了（plan.md の作業順序に従う）
 

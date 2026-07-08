@@ -222,8 +222,18 @@ export function cardFileUrl(cardId: string, thumb: boolean): string {
   return `${baseUrl}/cards/${cardId}/file?thumb=${thumb ? 1 : 0}`
 }
 
+export interface LibraryStatus {
+  open: boolean
+  root: string | null
+}
+
 export const api = {
   health: () => request<{ status: string }>('/health'),
+
+  getLibrary: () => request<LibraryStatus>('/library'),
+
+  openLibrary: (path: string, mode: 'open' | 'create') =>
+    request<LibraryStatus>('/library/open', { method: 'POST', body: JSON.stringify({ path, mode }) }),
 
   listCards: (params: ListCardsParams = {}) => {
     const search = new URLSearchParams()

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AppSettings, BackendStatus, EmbeddingStatus, LlamaServerStatus } from '../electron/main/types'
 import { IconSettings } from './components/icons'
+import { LibraryPicker } from './components/LibraryPicker'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SetupPanel } from './components/SetupPanel'
 import { StatusBar } from './components/StatusBar'
@@ -39,6 +40,9 @@ function AppShell() {
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
   const [backendHealthy, setBackendHealthy] = useState(false)
   const [rightPanel, setRightPanel] = useState<RightPanel>(null)
+  const [libraryRoot, setLibraryRoot] = useState<string | null>(null)
+  const [libraryChecked, setLibraryChecked] = useState(false)
+  const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false)
 
   // 初期化: Electron main から設定を取得し、API クライアントを構成する
   useEffect(() => {
@@ -70,13 +74,21 @@ function AppShell() {
     }
   }, [])
 
-  // バックエンドの死活監視
+  // バックエンドの死活監視 + ライブラリ状態の取得
   useEffect(() => {
     let canceled = false
     const check = async () => {
       try {
         await api.health()
-        if (!canceled) setBackendHealthy(true)
+        if (canceled) return
+        setBackendHealthy(true)
+        if (!libraryChecked) {
+          const library = await api.getLibrary()
+          if (canceled) return
+          setLibraryRoot(library.root)
+          setLibraryChecked(true)
+          if (!library.open) setIsLibraryPickerOpen(true)
+        }
       } catch {
         if (!canceled) setBackendHealthy(false)
       }
@@ -87,7 +99,8 @@ function AppShell() {
       canceled = true
       clearInterval(timer)
     }
-  }, [backendStatus])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendStatus, libraryChecked])
 
   const modelLabel = settings?.isModelLoaded
     ? settings.selectedModelName
@@ -96,7 +109,15 @@ function AppShell() {
       : 'llama-server 未導入'
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
+      {libraryChecked && isLibraryPickerOpen && (
+        <LibraryPicker
+          currentRoot={libraryRoot}
+          onOpened={() => window.location.reload()}
+          onClose={libraryRoot ? () => setIsLibraryPickerOpen(false) : null}
+        />
+      )}
+
       <header className="flex h-12 shrink-0 items-center gap-4 border-b border-[var(--border)] bg-[var(--bg-sidebar)] px-4">
         <span className="text-[15px] font-semibold tracking-wide">Story Flow</span>
 
@@ -175,7 +196,13 @@ function AppShell() {
             onClose={() => setRightPanel(null)}
           />
         )}
-        {rightPanel === 'settings' && <SettingsPanel onClose={() => setRightPanel(null)} />}
+        {rightPanel === 'settings' && (
+          <SettingsPanel
+            onClose={() => setRightPanel(null)}
+            libraryRoot={libraryRoot}
+            onOpenLibraryPicker={() => setIsLibraryPickerOpen(true)}
+          />
+        )}
       </div>
 
       <StatusBar backendHealthy={backendHealthy} modelLabel={modelLabel} />

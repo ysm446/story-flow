@@ -1,29 +1,85 @@
-"""SQLite 接続とスキーマ初期化。
+"""SQLite 接続とスキーマ初期化、ライブラリルートの解決。
 
-ライブラリルート（DB + メディア + サムネイル）は当面 data/library/ に置く。
-のちに設定で外部フォルダを参照できるよう、パスの解決はこのモジュールに集約し、
-DB に保存するメディアパスは必ずライブラリルート相対にする（image-assistant と同方式）。
+ライブラリ = 作品バンドル（DB + メディア + サムネイル + プロンプト）。丸ごとコピー/共有できる。
+どのライブラリを開くかはマシン設定（data/settings.json の library_root）に保存する。
+
+- 起動時: settings.json の library_root → 無ければ旧既定 data/library/（DB があれば）
+- どちらも無ければ「未オープン」状態になり、UI がライブラリピッカーを出す
+- DB に保存するメディアパスは必ずライブラリルート相対にする（外部フォルダ移動に追随）
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
 import sqlite_vec
 
-# Qwen3-Embedding-4B の次元。実装時に /v1/embeddings の返り値で実測確認して確定する
+# Qwen3-Embedding-4B の次元（2026-07-08 実測確認済み）
 EMBED_DIM = 2560
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+_SETTINGS_PATH = _REPO_ROOT / "data" / "settings.json"
+_LEGACY_LIBRARY_ROOT = _REPO_ROOT / "data" / "library"
+
+DB_FILENAME = "story-flow.sqlite3"
+
+_current_root: Path | None = None
+
+
+class LibraryNotOpen(RuntimeError):
+    """ライブラリが未オープン（ピッカーで開く必要がある）。"""
+
+
+def load_app_settings() -> dict:
+    try:
+        return json.loads(_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_app_setting(key: str, value) -> None:
+    """settings.json の 1 キーだけを read-modify-write で更新する（UI 設定と同居のため）。"""
+    settings = load_app_settings()
+    settings[key] = value
+    _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _SETTINGS_PATH.write_text(json.dumps(settings, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def resolve_initial_library_root() -> Path | None:
+    """起動時のライブラリルート解決。開けるものが無ければ None（未オープン）。"""
+    configured = load_app_settings().get("library_root")
+    if isinstance(configured, str) and configured.strip():
+        path = Path(configured)
+        if (path / DB_FILENAME).exists():
+            return path
+    if (_LEGACY_LIBRARY_ROOT / DB_FILENAME).exists():
+        return _LEGACY_LIBRARY_ROOT
+    return None
+
+
+def open_library(root: Path, persist: bool = True) -> None:
+    """ライブラリを開く（無ければ構造を作る）。以降の接続はこのルートを使う。"""
+    global _current_root
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "media").mkdir(exist_ok=True)
+    (root / "thumbs").mkdir(exist_ok=True)
+    _current_root = root
+    init_db()
+    if persist:
+        save_app_setting("library_root", str(root))
+
+
+def is_library_open() -> bool:
+    return _current_root is not None
 
 
 def get_library_root() -> Path:
-    """ライブラリルート。将来ここを設定値（外部フォルダ）に差し替える。"""
-    root = _REPO_ROOT / "data" / "library"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    if _current_root is None:
+        raise LibraryNotOpen("ライブラリが開かれていません。")
+    return _current_root
 
 
 def get_media_dir() -> Path:
@@ -39,7 +95,7 @@ def get_thumbs_dir() -> Path:
 
 
 def get_db_path() -> Path:
-    return get_library_root() / "story-flow.sqlite3"
+    return get_library_root() / DB_FILENAME
 
 
 def to_relative(path: Path) -> str:

@@ -6,7 +6,15 @@ import { PromptManager } from './PromptManager'
  * アプリ設定パネル。表示・演出の環境設定とプロンプト管理を置く
  * （サーバ関連はセットアップパネル）。
  */
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+export function SettingsPanel({
+  onClose,
+  libraryRoot,
+  onOpenLibraryPicker
+}: {
+  onClose: () => void
+  libraryRoot: string | null
+  onOpenLibraryPicker: () => void
+}) {
   const { settings, updateSettings } = useUiSettings()
 
   return (
@@ -23,6 +31,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
+        <section>
+          <h3 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">ライブラリ</h3>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="break-all font-mono text-[11px] text-[var(--text-faint)]">
+              {libraryRoot ?? '（未オープン）'}
+            </div>
+            <button
+              onClick={onOpenLibraryPicker}
+              className="mt-2 rounded border border-[var(--border-strong)] px-3 py-1.5 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)]"
+            >
+              新規作成 / 別のライブラリを開く…
+            </button>
+          </div>
+        </section>
+
         <section className="space-y-2">
           <h3 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">Generate（生成）</h3>
           <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { BackendManager } from './backend'
 import { EmbeddingServerManager } from './embeddingServer'
 import { fetchLlamaReleases, installLlamaVariant } from './llamaInstaller'
@@ -123,6 +123,17 @@ function registerIpc(): void {
 
   ipcMain.handle('backend:status', async () => backendManager.getStatus())
   ipcMain.handle('backend:ensure', async () => backendManager.ensureRunning())
+
+  // ライブラリの新規作成/切り替え用のフォルダ選択
+  ipcMain.handle('dialog:pickFolder', async (event, title?: string) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return null
+    const result = await dialog.showOpenDialog(window, {
+      title: title ?? 'フォルダを選択',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
 
   // UI 設定は data/settings.json に保存する
   ipcMain.handle('uiSettings:load', async () => {
