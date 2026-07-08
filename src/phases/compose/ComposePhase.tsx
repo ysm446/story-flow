@@ -124,9 +124,20 @@ function AnchorNode({ data, selected }: NodeProps) {
       }`}
     >
       <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-[var(--accent)]" />
-      {card.media_path && card.media_type === 'image' && (
-        <div className="h-[84px] overflow-hidden bg-[var(--bg-canvas)]">
-          <img src={cardFileUrl(card.id, true)} alt="" className="h-full w-full object-cover" draggable={false} />
+      {card.media_path && (
+        <div className="relative h-[84px] overflow-hidden bg-[var(--bg-canvas)]">
+          <img
+            src={cardFileUrl(card.id, true)}
+            alt=""
+            className="h-full w-full object-cover"
+            draggable={false}
+            onError={(event) => {
+              event.currentTarget.style.visibility = 'hidden'
+            }}
+          />
+          {card.media_type === 'video' && (
+            <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">🎬</span>
+          )}
         </div>
       )}
       <div className="px-2.5 py-2">

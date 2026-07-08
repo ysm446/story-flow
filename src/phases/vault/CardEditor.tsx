@@ -62,6 +62,7 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
   })
   const [pendingFile, setPendingFile] = useState<File | null>(initialFile)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [isPlayingVideo, setIsPlayingVideo] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [similar, setSimilar] = useState<Card[] | null>(null)
@@ -80,6 +81,7 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
       mood: tagsToText(card?.tags ?? [], 'mood')
     })
     setPendingFile(initialFile ?? null)
+    setIsPlayingVideo(false)
     setSimilar(null)
     setError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,13 +169,20 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        {/* メディア（クリックで選択 / ドラッグ&ドロップ対応） */}
+        {/* メディア（クリックで選択、保存済み動画はクリックで再生 / ドラッグ&ドロップ対応） */}
         <div>
           <div
-            className={`flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-[var(--bg-canvas)] ${
+            className={`relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-[var(--bg-canvas)] ${
               isDragOver ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--border)]'
             }`}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              // 保存済みの動画はクリックで再生/停止。それ以外はファイル選択
+              if (!pendingFile && card?.media_type === 'video' && card.media_path) {
+                setIsPlayingVideo((playing) => !playing)
+              } else {
+                fileInputRef.current?.click()
+              }
+            }}
             onDragOver={(event) => {
               event.preventDefault()
               setIsDragOver(true)
@@ -183,9 +192,16 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
               event.preventDefault()
               setIsDragOver(false)
               const file = pickMediaFile(event.dataTransfer)
-              if (file) setPendingFile(file)
+              if (file) {
+                setIsPlayingVideo(false)
+                setPendingFile(file)
+              }
             }}
-            title="クリックして選択、またはファイルをドロップ"
+            title={
+              !pendingFile && card?.media_type === 'video' && card.media_path
+                ? 'クリックで再生/停止。差し替えは「ファイル変更」'
+                : 'クリックして選択、またはファイルをドロップ'
+            }
           >
             {isDragOver ? (
               <span className="pointer-events-none text-[13px] text-[var(--text)]">ここにドロップ</span>
@@ -194,23 +210,51 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
                 // 選択直後の動画はその場で再生プレビュー
                 <video src={previewUrl} muted autoPlay loop playsInline className="pointer-events-none h-full w-full object-cover" />
               ) : !pendingFile && card?.media_type === 'video' ? (
-                // 保存済みの動画はサムネイル + バッジ
-                <div className="pointer-events-none relative h-full w-full">
-                  <img
-                    src={previewUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    onError={(event) => {
-                      event.currentTarget.style.visibility = 'hidden'
-                    }}
+                isPlayingVideo ? (
+                  <video
+                    src={cardFileUrl(card.id, false)}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="h-full w-full bg-black object-contain"
+                    onClick={(event) => event.stopPropagation()}
+                    onEnded={() => setIsPlayingVideo(false)}
                   />
-                  <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">🎬</span>
-                </div>
+                ) : (
+                  // 保存済みの動画はサムネイル + 再生ヒント
+                  <div className="pointer-events-none relative h-full w-full">
+                    <img
+                      src={previewUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.visibility = 'hidden'
+                      }}
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="rounded-full bg-black/55 px-3 py-2 text-[16px]">▶</span>
+                    </span>
+                    <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">🎬</span>
+                  </div>
+                )
               ) : (
                 <img src={previewUrl} alt="" className="pointer-events-none h-full w-full object-cover" />
               )
             ) : (
               <span className="text-[13px] text-[var(--text-faint)]">クリックして選択、またはドロップで追加</span>
+            )}
+
+            {/* 保存済み動画のときの差し替え導線（クリックは再生に割り当てているため） */}
+            {!pendingFile && card?.media_type === 'video' && card.media_path && !isDragOver && (
+              <button
+                onClick={(event) => {
+                  event.stopPropagation()
+                  fileInputRef.current?.click()
+                }}
+                className="absolute right-1.5 top-1.5 rounded bg-black/55 px-2 py-1 text-[11px] text-white/90 hover:bg-black/75"
+              >
+                ファイル変更
+              </button>
             )}
           </div>
           <input
