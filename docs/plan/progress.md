@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 04:52
+更新日時: 2026-07-09 04:58
 
 ## 現在地
 
@@ -210,6 +210,19 @@ Vault → Compose → Generate → Theater が一本つながった。
     （mmproj なし）のときはフロントで自動オフ
   - 検証: build / py_compile / 実カード（動画サムネ）の data URL 生成 OK。
     実 LLM での vision 生成は次回の生成実行で確認
+
+- 2026-07-09: **Generate をキャンバス + テイクモデルに再設計**（作者要望、spec §4.5 追記）:
+  - backend: 生成は常に新テイクとして保存（stories.parent_story_id で系譜、上書きしない）。
+    部分再生成 API — base_story_id + start_position + mode（from_here / single）。
+    直前シーンの state_after から StoryState を復元して再開し、対象外シーンはコピー
+    （reused/stale フラグ付きでイベント送出）。バリデーション + コピー経路 + state 再開を
+    TestClient で検証済み
+  - UI: Generate を React Flow キャンバス化。Compose と同じ配置のノードに清書文が
+    ストリーミングで書き込まれる（ノード内自動スクロール、状態で枠色変化）。
+    各ノードに「↻ このシーンのみ」「↻ ここから最後まで」。single 再生成後の後続シーンは
+    「要確認」バッジ。左サイドにテイク一覧（時刻・シーン数・↻系譜マーク、クリックで表示、
+    そこから部分再生成、削除可）
+  - 未検証: 実 LLM での部分再生成の通し（次回の生成実行で確認）
 
 ## 未完了（plan.md の作業順序に従う）
 

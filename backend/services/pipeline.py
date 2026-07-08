@@ -29,14 +29,23 @@ def generate_stream(
     workspace_id: str | None = None,
     scene_length: str | None = None,
     include_images: bool = False,
+    base_scenes: list[dict] | None = None,
+    start_position: int = 0,
+    mode: str = "full",
 ) -> Iterator[dict]:
     """アンカー列（v1: FIXED のみ）を左から逐次清書し、シーン毎に dict を yield する。
 
     slots: [{"card": カード dict, "instruction": その作品でのシーンへの追加指示 | None}]
 
+    部分再生成（テイクからの撮り直し）:
+      base_scenes: 元テイクの story_scenes 行。指定時は position < start_position を
+      コピーし、直前の state_after から生成を再開する。
+      mode="single" なら start_position の 1 シーンだけ生成し、以降もコピー
+      （確定事実がずれる可能性があるため stale=True を付けて返す）。
+
     yield するイベント:
       {"type": "delta", "position", "text"}   # 清書中の断片（ストリーミング表示用）
-      {"type": "scene", "position", "total", "card_id", "card_title", "prose", "state_after", "is_fixed"}
+      {"type": "scene", "position", "total", ..., "reused", "stale"}
       {"type": "done", "story_id"}
     """
     state = StoryState.empty()
@@ -45,6 +54,36 @@ def generate_stream(
 
     for index, slot in enumerate(slots):
         card = slot["card"]
+        reuse = base_scenes is not None and (
+            index < start_position or (mode == "single" and index > start_position)
+        )
+        if reuse:
+            base = base_scenes[index]
+            try:
+                state_snapshot = json.loads(base["state_after"]) if base["state_after"] else state.snapshot()
+            except (json.JSONDecodeError, TypeError):
+                state_snapshot = state.snapshot()
+            # 生成再開時に直前の確定事実を引き継げるよう state も追従させる
+            state = StoryState.from_dict(state_snapshot)
+            scene = {
+                "position": index,
+                "total": total,
+                "card_id": base["card_id"],
+                "card_title": card.get("title", ""),
+                "prose": base["prose"],
+                "state_after": state_snapshot,
+                "is_fixed": bool(base["is_fixed"]),
+                "selection_reason": base["selection_reason"],
+            }
+            scenes.append(scene)
+            yield {
+                "type": "scene",
+                **scene,
+                "reused": True,
+                "stale": mode == "single" and index > start_position,
+            }
+            continue
+
         position = "opening" if index == 0 else ("ending" if index == total - 1 else "middle")
         image_data_url = None
         if include_images and card.get("media_path"):
@@ -77,20 +116,31 @@ def generate_stream(
             "selection_reason": None,
         }
         scenes.append(scene)
-        yield {"type": "scene", **scene}
+        yield {"type": "scene", **scene, "reused": False, "stale": False}
 
-    story_id = save_story(plot, target_tone, scenes, workspace_id)
+    parent_story_id = base_scenes[0]["story_id"] if base_scenes else None
+    story_id = save_story(plot, target_tone, scenes, workspace_id, parent_story_id)
     yield {"type": "done", "story_id": story_id}
 
 
-def save_story(plot: str, target_tone: str | None, scenes: list[dict], workspace_id: str | None = None) -> str:
-    """物語を保存する。保存のみで index はしない（spec §1.4 判断）。"""
+def save_story(
+    plot: str,
+    target_tone: str | None,
+    scenes: list[dict],
+    workspace_id: str | None = None,
+    parent_story_id: str | None = None,
+) -> str:
+    """物語を保存する。保存のみで index はしない（spec §1.4 判断）。
+
+    部分再生成でも上書きせず、常に新しいテイクとして保存する（後戻り可能）。
+    """
     conn = get_connection()
     try:
         story_id = str(uuid.uuid4())
         conn.execute(
-            "INSERT INTO stories (id, plot, target_tone, workspace_id, created_at) VALUES (?, ?, ?, ?, ?)",
-            (story_id, plot or None, target_tone, workspace_id, datetime.now(timezone.utc).isoformat()),
+            "INSERT INTO stories (id, plot, target_tone, workspace_id, parent_story_id, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (story_id, plot or None, target_tone, workspace_id, parent_story_id, datetime.now(timezone.utc).isoformat()),
         )
         for scene in scenes:
             conn.execute(

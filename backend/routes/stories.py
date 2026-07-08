@@ -13,13 +13,17 @@ router = APIRouter(tags=["stories"])
 def list_stories(workspace_id: str | None = None) -> dict:
     conn = get_connection()
     try:
+        base_sql = (
+            "SELECT s.*, (SELECT COUNT(*) FROM story_scenes sc WHERE sc.story_id = s.id) AS scene_count"
+            " FROM stories s"
+        )
         if workspace_id:
             rows = conn.execute(
-                "SELECT * FROM stories WHERE workspace_id = ? ORDER BY created_at DESC",
+                f"{base_sql} WHERE s.workspace_id = ? ORDER BY s.created_at DESC",
                 (workspace_id,),
             ).fetchall()
         else:
-            rows = conn.execute("SELECT * FROM stories ORDER BY created_at DESC").fetchall()
+            rows = conn.execute(f"{base_sql} ORDER BY s.created_at DESC").fetchall()
         return {"stories": [dict(row) for row in rows]}
     finally:
         conn.close()

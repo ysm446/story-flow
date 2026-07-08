@@ -41,11 +41,12 @@ CREATE VIRTUAL TABLE IF NOT EXISTS cards_fts USING fts5(
 -- 4.5 stories — 生成された物語（1 インスタンス）
 -- 注: 清書結果は保存するが index しない（embedding / FTS を張らない。spec §1.4）
 CREATE TABLE IF NOT EXISTS stories (
-  id           TEXT PRIMARY KEY,
-  plot         TEXT,                     -- 入力プロット
-  target_tone  TEXT,                     -- 目標トーン（v1.5 で使用、v1 は NULL 可）
-  workspace_id TEXT REFERENCES workspaces(id),  -- 生成元ワークスペース（NULL 可）
-  created_at   TEXT NOT NULL
+  id               TEXT PRIMARY KEY,
+  plot             TEXT,                     -- 入力プロット
+  target_tone      TEXT,                     -- 目標トーン（v1.5 で使用、v1 は NULL 可）
+  workspace_id     TEXT REFERENCES workspaces(id),  -- 生成元ワークスペース（NULL 可）
+  parent_story_id  TEXT REFERENCES stories(id),     -- 部分再生成の元テイク（NULL = 新規生成）
+  created_at       TEXT NOT NULL
 );
 
 -- 4.7 workspaces — 作品単位の編集状態（spec §4.7）

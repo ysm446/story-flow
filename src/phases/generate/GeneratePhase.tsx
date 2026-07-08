@@ -1,61 +1,232 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type Card, type GenerateEvent } from '../../lib/api'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Background,
+  Handle,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  type Edge,
+  type Node,
+  type NodeProps
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import { api, type Card, type GenerateEvent, type StorySummary } from '../../lib/api'
 import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
 import { useUiSettings } from '../../store/settings'
 
-const ROLE_LABELS: Record<string, string> = {
-  intro: '導入',
-  rising: '展開',
-  turn: '転換',
-  climax: 'クライマックス',
-  ending: '結末'
-}
+type SceneStatus = 'pending' | 'streaming' | 'done' | 'reused' | 'stale'
 
-const TONE_LABELS: Record<string, string> = {
-  happy: 'ハッピー',
-  bad: 'バッド',
-  bitter: 'ビター',
-  neutral: 'ニュートラル'
+interface SceneView {
+  cardId: string
+  title: string
+  prose: string
+  status: SceneStatus
 }
-
-type SceneEvent = Extract<GenerateEvent, { type: 'scene' }>
 
 type RunStatus = 'idle' | 'starting-model' | 'generating' | 'done' | 'error'
 
+type RegenMode = 'from_here' | 'single'
+
+interface SceneNodeData {
+  index: number
+  scene: SceneView
+  isRunning: boolean
+  hasTake: boolean
+  onRegenerate: (index: number, mode: RegenMode) => void
+}
+
+const STATUS_LABELS: Record<SceneStatus, string | null> = {
+  pending: null,
+  streaming: '清書中…',
+  done: null,
+  reused: 'コピー',
+  stale: '要確認'
+}
+
+function SceneNode({ data }: NodeProps) {
+  const { index, scene, isRunning, hasTake, onRegenerate } = data as unknown as SceneNodeData
+  const proseRef = useRef<HTMLDivElement>(null)
+
+  // ストリーミング中は最新の行に追従
+  useEffect(() => {
+    if (scene.status === 'streaming' && proseRef.current) {
+      proseRef.current.scrollTop = proseRef.current.scrollHeight
+    }
+  }, [scene.prose, scene.status])
+
+  const statusLabel = STATUS_LABELS[scene.status]
+
+  return (
+    <div
+      className={`w-[300px] overflow-hidden rounded-md border bg-[var(--bg-card)] ${
+        scene.status === 'streaming'
+          ? 'border-[var(--accent)]'
+          : scene.status === 'stale'
+            ? 'border-[var(--danger)]'
+            : 'border-[var(--border-strong)]'
+      }`}
+    >
+      <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-[var(--accent)]" />
+      <div className="flex items-center gap-2 border-b border-[var(--border)] px-2.5 py-1.5">
+        <span className="text-[11px] font-semibold text-[var(--text-faint)]">{index + 1}</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{scene.title}</span>
+        {statusLabel && (
+          <span
+            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
+              scene.status === 'streaming'
+                ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                : scene.status === 'stale'
+                  ? 'bg-[rgba(239,68,68,0.15)] text-[var(--danger)]'
+                  : 'bg-[var(--bg-elevated)] text-[var(--text-faint)]'
+            }`}
+            title={scene.status === 'stale' ? '前のシーンを再生成したため、確定事実とずれている可能性があります' : ''}
+          >
+            {statusLabel}
+          </span>
+        )}
+      </div>
+      <div ref={proseRef} className="nowheel h-[150px] overflow-y-auto px-2.5 py-2">
+        {scene.prose ? (
+          <p className="whitespace-pre-wrap text-[11px] leading-[1.7] text-[var(--text)]">
+            {scene.prose}
+            {scene.status === 'streaming' && <span className="animate-pulse text-[var(--accent)]">▍</span>}
+          </p>
+        ) : (
+          <p className="text-[11px] text-[var(--text-faint)]">
+            {scene.status === 'pending' ? '（未生成）' : ''}
+          </p>
+        )}
+      </div>
+      <div className="flex gap-1 border-t border-[var(--border)] px-2 py-1.5">
+        <button
+          onClick={() => onRegenerate(index, 'single')}
+          disabled={isRunning || !hasTake}
+          title="このシーンだけ書き直す（以降のシーンはそのまま。確定事実がずれる可能性あり）"
+          className="flex-1 rounded border border-[var(--border-strong)] px-1 py-1 text-[10px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-40"
+        >
+          ↻ このシーンのみ
+        </button>
+        <button
+          onClick={() => onRegenerate(index, 'from_here')}
+          disabled={isRunning || !hasTake}
+          title="このシーンから最後までを書き直す"
+          className="flex-1 rounded border border-[var(--border-strong)] px-1 py-1 text-[10px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-40"
+        >
+          ↻ ここから最後まで
+        </button>
+      </div>
+      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !bg-[var(--accent)]" />
+    </div>
+  )
+}
+
+const nodeTypes = { scene: SceneNode }
+
 /**
- * Generate: 実行と進行表示。
- * 構成（アンカー・プロット・トーン・プロンプト）は Compose で決める。
- * Compose の「生成する」から遷移した場合は自動で生成を開始する。
+ * Generate: フローチャート上のノードに清書文がストリーミングで書き込まれる実行ビュー。
+ * 生成結果は毎回「テイク」として保存され（上書きしない）、テイク一覧からいつでも
+ * 後戻り・そこからの部分再生成ができる。構成の編集は Compose で行う。
  */
 export function GeneratePhase() {
-  const { composition, setPhase, pendingGenerate, setPendingGenerate, workspaceId } = useAppStore()
+  return (
+    <ReactFlowProvider>
+      <GenerateInner />
+    </ReactFlowProvider>
+  )
+}
+
+function GenerateInner() {
+  const { composition, setPhase, pendingGenerate, setPendingGenerate, workspaceId, composeNodes } = useAppStore()
   const { settings: uiSettings } = useUiSettings()
   const [allCards, setAllCards] = useState<Card[]>([])
+  const [takes, setTakes] = useState<StorySummary[]>([])
+  const [currentTakeId, setCurrentTakeId] = useState<string | null>(null)
+  const [sceneViews, setSceneViews] = useState<SceneView[]>([])
   const [status, setStatus] = useState<RunStatus>('idle')
-  const [scenes, setScenes] = useState<SceneEvent[]>([])
-  const [drafts, setDrafts] = useState<Record<number, string>>({})
-  const [storyId, setStoryId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const autoStarted = useRef(false)
 
-  useEffect(() => {
-    void api.listCards().then((result) => setAllCards(result.cards)).catch(() => setAllCards([]))
-  }, [])
-
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
-  const anchors = composition.anchors
   const isRunning = status === 'starting-model' || status === 'generating'
 
-  const handleGenerate = async () => {
-    if (anchors.length === 0 || isRunning) return
-    setScenes([])
-    setDrafts({})
-    setStoryId(null)
+  const refreshTakes = useCallback(async () => {
+    if (!workspaceId) return
+    try {
+      setTakes((await api.listStories(workspaceId)).stories)
+    } catch {
+      // 一覧はベストエフォート
+    }
+  }, [workspaceId])
+
+  // 初期化: カード一覧 + テイク一覧。最新テイクがあれば表示する
+  useEffect(() => {
+    let canceled = false
+    void (async () => {
+      const cards = await api.listCards().catch(() => ({ cards: [] as Card[] }))
+      if (canceled) return
+      setAllCards(cards.cards)
+      if (!workspaceId) return
+      const list = (await api.listStories(workspaceId).catch(() => ({ stories: [] as StorySummary[] }))).stories
+      if (canceled) return
+      setTakes(list)
+      // Compose からの自動生成が控えている場合はテイク表示をスキップ
+      if (!pendingGenerate && list.length > 0) {
+        void showTake(list[0].id, new Map(cards.cards.map((card) => [card.id, card])))
+      }
+    })()
+    return () => {
+      canceled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId])
+
+  const showTake = async (storyId: string, cards?: Map<string, Card>) => {
+    try {
+      const story = await api.getStory(storyId)
+      const lookup = cards ?? cardById
+      setSceneViews(
+        [...story.scenes]
+          .sort((a, b) => a.position - b.position)
+          .map((scene) => ({
+            cardId: scene.card_id,
+            title: lookup.get(scene.card_id)?.title ?? '(削除済みカード)',
+            prose: scene.prose,
+            status: 'done' as const
+          }))
+      )
+      setCurrentTakeId(storyId)
+      setError(null)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
+  const runGeneration = async (options: { baseStoryId: string | null; startPosition: number; mode: 'full' | RegenMode }) => {
+    if (isRunning) return
+    // スロット列: full は Compose の構成、部分再生成は表示中テイクのカード列
+    const slotCards =
+      options.mode === 'full'
+        ? composition.anchors.map((anchor) => ({ cardId: anchor.cardId, instruction: anchor.instruction }))
+        : sceneViews.map((scene) => {
+            const node = composeNodes.find((item) => item.id === scene.cardId)
+            const instruction = node ? (((node.data as Record<string, unknown>).instruction as string) ?? '').trim() : ''
+            return { cardId: scene.cardId, instruction: instruction || null }
+          })
+    if (slotCards.length === 0) return
+
     setError(null)
     setStatus('starting-model')
+    setSceneViews(
+      slotCards.map((slot, index) => ({
+        cardId: slot.cardId,
+        title: cardById.get(slot.cardId)?.title ?? '',
+        prose: '',
+        status: 'pending' as const
+      }))
+    )
+
     try {
-      // writer モデルが未起動なら起動して待つ
       let settings = await window.storyFlow.listModels()
       if (!settings.isServerInstalled) {
         throw new Error('llama-server が未インストールです。セットアップからインストールしてください。')
@@ -68,24 +239,43 @@ export function GeneratePhase() {
       await postSse<GenerateEvent>(
         '/generate',
         {
-          slots: anchors.map((anchor) => ({ card_id: anchor.cardId, instruction: anchor.instruction })),
+          slots: slotCards.map((slot) => ({ card_id: slot.cardId, instruction: slot.instruction })),
           plot: composition.plot,
           target_tone: composition.targetTone || null,
           writer_base_url: settings.llamaBaseUrl,
           workspace_id: workspaceId,
           prompt_preset_id: composition.promptPresetId,
           scene_length: composition.sceneLength || null,
-          // vision 非対応モデル（mmproj なし）のときは自動でオフ
-          include_images: uiSettings.generateIncludeImages && settings.supportsVision
+          include_images: uiSettings.generateIncludeImages && settings.supportsVision,
+          base_story_id: options.baseStoryId,
+          start_position: options.startPosition,
+          mode: options.mode
         },
         (event) => {
           if (event.type === 'delta') {
-            setDrafts((prev) => ({ ...prev, [event.position]: (prev[event.position] ?? '') + event.text }))
+            setSceneViews((prev) =>
+              prev.map((scene, index) =>
+                index === event.position
+                  ? { ...scene, prose: scene.prose + event.text, status: 'streaming' }
+                  : scene
+              )
+            )
           } else if (event.type === 'scene') {
-            setScenes((prev) => [...prev.filter((scene) => scene.position !== event.position), event])
+            setSceneViews((prev) =>
+              prev.map((scene, index) =>
+                index === event.position
+                  ? {
+                      ...scene,
+                      prose: event.prose,
+                      status: event.stale ? 'stale' : event.reused ? 'reused' : 'done'
+                    }
+                  : scene
+              )
+            )
           } else if (event.type === 'done') {
-            setStoryId(event.story_id)
+            setCurrentTakeId(event.story_id)
             setStatus('done')
+            void refreshTakes()
           } else {
             setError(event.message)
             setStatus('error')
@@ -99,169 +289,173 @@ export function GeneratePhase() {
     }
   }
 
+  const handleRegenerate = useCallback(
+    (index: number, mode: RegenMode) => {
+      if (!currentTakeId) return
+      void runGeneration({ baseStoryId: currentTakeId, startPosition: index, mode })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentTakeId, sceneViews, isRunning, composition, workspaceId, composeNodes, cardById]
+  )
+
   // Compose の「生成する」からの遷移なら自動開始
   useEffect(() => {
     if (pendingGenerate && !autoStarted.current) {
       autoStarted.current = true
       setPendingGenerate(false)
-      void handleGenerate()
+      void runGeneration({ baseStoryId: null, startPosition: 0, mode: 'full' })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingGenerate])
 
-  return (
-    <div className="mx-auto flex h-full max-w-6xl gap-6 px-6 py-6">
-      {/* 左: 実行サマリ */}
-      <div className="w-[320px] shrink-0 space-y-5 overflow-y-auto pr-1">
-        <div>
-          <h1 className="text-[18px] font-semibold">Generate — 生成</h1>
-          <p className="mt-1 text-[12px] text-[var(--text-dim)]">
-            構成の編集は Compose フェーズで行います。ここでは実行と進行を確認します。
-          </p>
-        </div>
+  const handleDeleteTake = async (take: StorySummary) => {
+    if (!window.confirm('このテイクを削除しますか？')) return
+    try {
+      await api.deleteStory(take.id)
+      if (currentTakeId === take.id) {
+        setCurrentTakeId(null)
+        setSceneViews([])
+      }
+      void refreshTakes()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
 
-        <section>
-          <h2 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">アンカー列</h2>
-          {anchors.length === 0 ? (
-            <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[12px] text-[var(--text-faint)]">
+  // ノード配置: Compose のカード位置を引き継ぎ、無ければ横一列
+  const { nodes, edges } = useMemo(() => {
+    const nodes: Node[] = sceneViews.map((scene, index) => {
+      const composeNode = composeNodes.find((item) => item.id === scene.cardId)
+      const position = composeNode ? { ...composeNode.position } : { x: 60 + index * 340, y: 160 }
+      return {
+        id: `scene-${index}`,
+        type: 'scene',
+        position,
+        data: {
+          index,
+          scene,
+          isRunning,
+          hasTake: currentTakeId !== null,
+          onRegenerate: handleRegenerate
+        } satisfies SceneNodeData as unknown as Record<string, unknown>
+      }
+    })
+    const edges: Edge[] = sceneViews.slice(1).map((_, index) => ({
+      id: `edge-${index}`,
+      source: `scene-${index}`,
+      target: `scene-${index + 1}`,
+      type: 'smoothstep'
+    }))
+    return { nodes, edges }
+  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate])
+
+  return (
+    <div className="flex h-full">
+      {/* 左: 実行 + テイク一覧 */}
+      <aside className="flex w-[260px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)]">
+        <div className="space-y-2 border-b border-[var(--border)] p-3">
+          <h1 className="text-[15px] font-semibold">Generate — 生成</h1>
+          <button
+            onClick={() => void runGeneration({ baseStoryId: null, startPosition: 0, mode: 'full' })}
+            disabled={isRunning || composition.anchors.length === 0}
+            className="w-full rounded bg-[var(--accent)] px-4 py-2 text-[13px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {status === 'starting-model'
+              ? 'モデル起動中…'
+              : status === 'generating'
+                ? '生成中…'
+                : '新しいテイクを生成'}
+          </button>
+          {composition.anchors.length === 0 && (
+            <div className="text-[11px] text-[var(--text-faint)]">
               構成がありません。
-              <button onClick={() => setPhase('compose')} className="ml-1 text-[var(--accent)] hover:underline">
+              <button onClick={() => setPhase('compose')} className="text-[var(--accent)] hover:underline">
                 Compose で組む →
               </button>
             </div>
-          ) : (
-            <ol className="space-y-1.5">
-              {anchors.map((anchor, index) => {
-                const card = cardById.get(anchor.cardId)
-                return (
-                  <li
-                    key={anchor.cardId}
-                    className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2.5 py-1.5"
-                  >
-                    <span className="w-5 shrink-0 text-center text-[12px] text-[var(--text-faint)]">{index + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-[13px]">{card?.title ?? anchor.cardId}</span>
-                    {anchor.instruction && (
-                      <span className="shrink-0 text-[11px]" title={anchor.instruction}>
-                        📝
-                      </span>
-                    )}
-                    {card?.role && (
-                      <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
-                        {ROLE_LABELS[card.role]}
-                      </span>
-                    )}
-                  </li>
-                )
-              })}
-            </ol>
           )}
-        </section>
-
-        {composition.plot.trim() && (
-          <section>
-            <h2 className="mb-1 text-[13px] font-semibold text-[var(--text-dim)]">プロット</h2>
-            <p className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[12px] leading-relaxed text-[var(--text-dim)]">
-              {composition.plot}
-            </p>
-          </section>
-        )}
-
-        {composition.targetTone && (
-          <div className="text-[12px] text-[var(--text-dim)]">
-            目標トーン:{' '}
-            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
-              {TONE_LABELS[composition.targetTone]}
-            </span>
-          </div>
-        )}
-
-        <button
-          onClick={() => void handleGenerate()}
-          disabled={isRunning || anchors.length === 0}
-          className="w-full rounded bg-[var(--accent)] px-4 py-2.5 text-[14px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {status === 'starting-model'
-            ? 'モデル起動中…'
-            : status === 'generating'
-              ? '生成中…'
-              : status === 'done'
-                ? 'もう一度生成する（別の読み味に）'
-                : '生成する'}
-        </button>
-      </div>
-
-      {/* 右: 進行表示 */}
-      <div className="min-w-0 flex-1 overflow-y-auto">
-        <h2 className="text-[13px] font-semibold text-[var(--text-dim)]">生成の進行</h2>
-
-        {error && (
-          <div className="mt-3 rounded-md border border-[var(--danger)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-[13px] text-[var(--danger)]">
-            {error}
-          </div>
-        )}
-
-        {storyId && (
-          <div className="mt-3 flex items-center gap-3 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 text-[13px]">
-            <span>物語を保存しました。</span>
+          {currentTakeId && status === 'done' && (
             <button
               onClick={() => setPhase('theater')}
-              className="rounded bg-[var(--accent)] px-3 py-1 text-[12px] font-medium text-white hover:bg-[var(--accent-hover)]"
+              className="w-full rounded border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1.5 text-[12px] hover:bg-[var(--accent-soft)]"
             >
               Theater で再生 →
             </button>
-          </div>
-        )}
-
-        <div className="mt-3 space-y-3">
-          {anchors.map((anchor, index) => {
-            const card = cardById.get(anchor.cardId)
-            const scene = scenes.find((item) => item.position === index)
-            const draft = !scene ? drafts[index] : undefined
-            const isNext = !scene && scenes.length === index && isRunning
-            return (
-              <div
-                key={anchor.cardId}
-                className={`rounded-md border px-4 py-3 ${
-                  scene
-                    ? 'border-[var(--border)] bg-[var(--bg-card)]'
-                    : isNext
-                      ? 'border-[var(--accent-border)] bg-[var(--bg-card)]'
-                      : 'border-dashed border-[var(--border)] bg-transparent'
-                }`}
-              >
-                <div className="flex items-center gap-2 text-[12px] text-[var(--text-dim)]">
-                  <span className="font-semibold">シーン {index + 1}</span>
-                  <span className="truncate">{card?.title ?? ''}</span>
-                  {isNext && <span className="text-[var(--accent)]">清書中…</span>}
-                </div>
-                {draft !== undefined && (
-                  <p className="mt-2 whitespace-pre-wrap text-[14px] leading-[1.8] text-[var(--text-dim)]">
-                    {draft}
-                    <span className="animate-pulse text-[var(--accent)]">▍</span>
-                  </p>
-                )}
-                {scene && (
-                  <>
-                    <p className="mt-2 whitespace-pre-wrap text-[14px] leading-[1.8]">{scene.prose}</p>
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-[11px] text-[var(--text-faint)]">
-                        確定事実（このシーン終了時点）
-                      </summary>
-                      <pre className="mt-1 overflow-x-auto rounded bg-[var(--bg-canvas)] px-2 py-1.5 text-[11px] leading-relaxed text-[var(--text-dim)]">
-                        {JSON.stringify(scene.state_after, null, 2)}
-                      </pre>
-                    </details>
-                  </>
-                )}
-              </div>
-            )
-          })}
-          {anchors.length === 0 && (
-            <div className="mt-10 text-center text-[13px] text-[var(--text-faint)]">
-              Compose で構成を組んで「生成する」を押すと、ここにシーンが 1 枚ずつ埋まっていきます。
+          )}
+          {error && (
+            <div className="rounded border border-[var(--danger)] bg-[rgba(239,68,68,0.08)] px-2 py-1.5 text-[11px] text-[var(--danger)]">
+              {error}
             </div>
           )}
         </div>
+
+        <div className="border-b border-[var(--border)] px-3 py-2 text-[13px] font-semibold text-[var(--text-dim)]">
+          テイク（後戻り・撮り直しの起点）
+        </div>
+        <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
+          {takes.length === 0 && (
+            <div className="px-1 py-2 text-[12px] text-[var(--text-faint)]">まだテイクがありません。</div>
+          )}
+          {takes.map((take, index) => (
+            <div
+              key={take.id}
+              className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${
+                currentTakeId === take.id
+                  ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
+                  : 'border-[var(--border)] bg-[var(--bg-card)]'
+              }`}
+            >
+              <button
+                onClick={() => void showTake(take.id)}
+                disabled={isRunning}
+                className="min-w-0 flex-1 text-left disabled:opacity-50"
+              >
+                <span className="block truncate text-[12px]">
+                  テイク {takes.length - index}
+                  {take.parent_story_id && (
+                    <span className="ml-1 text-[10px] text-[var(--text-faint)]" title="部分再生成から生まれたテイク">
+                      ↻
+                    </span>
+                  )}
+                </span>
+                <span className="block text-[10px] text-[var(--text-faint)]">
+                  {new Date(take.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} ・{' '}
+                  {take.scene_count} シーン
+                </span>
+              </button>
+              <button
+                onClick={() => void handleDeleteTake(take)}
+                disabled={isRunning}
+                aria-label="テイクを削除"
+                className="shrink-0 rounded px-1 py-0.5 text-[11px] text-[var(--text-faint)] hover:bg-[var(--bg-elevated)] hover:text-[var(--danger)] disabled:opacity-40"
+              >
+                🗑
+              </button>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* キャンバス */}
+      <div className="relative min-w-0 flex-1">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          nodesConnectable={false}
+          minZoom={0.2}
+          maxZoom={1.5}
+          fitView
+          proOptions={{ hideAttribution: true }}
+          className="bg-[var(--bg-canvas)]"
+        >
+          <Background gap={20} />
+        </ReactFlow>
+        {sceneViews.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[13px] text-[var(--text-faint)]">
+            Compose で構成を組んで「生成する」を押すと、ここでノードに清書文が流れ込みます。
+          </div>
+        )}
       </div>
     </div>
   )

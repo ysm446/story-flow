@@ -35,6 +35,10 @@ class GenerateInput(BaseModel):
     prompt_preset_id: str | None = None  # ワークスペースの清書プロンプト。無効/未指定なら既定側
     scene_length: Literal["short", "standard", "long"] | None = None  # シーンの目安の長さ
     include_images: bool = False  # カードのメディアを writer に見せる（vision 対応モデル向け）
+    # 部分再生成（テイクからの撮り直し）
+    base_story_id: str | None = None  # 元テイク。mode が full 以外のとき必須
+    start_position: int = 0  # この位置から生成（それ以前は元テイクからコピー）
+    mode: Literal["full", "from_here", "single"] = "full"
 
 
 def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
@@ -51,9 +55,32 @@ def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
         conn.close()
 
 
+def _load_base_scenes(base_story_id: str, expected_count: int, start_position: int) -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM story_scenes WHERE story_id = ? ORDER BY position",
+            (base_story_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        raise HTTPException(status_code=404, detail="base story not found")
+    if len(rows) != expected_count:
+        raise HTTPException(status_code=422, detail="slots がテイクのシーン数と一致しません")
+    if not (0 <= start_position < len(rows)):
+        raise HTTPException(status_code=422, detail="start_position が範囲外です")
+    return [dict(row) for row in rows]
+
+
 @router.post("/generate")
 def generate_story(payload: GenerateInput) -> StreamingResponse:
     slots = _load_slots(payload.slots)
+    base_scenes: list[dict] | None = None
+    if payload.mode != "full":
+        if not payload.base_story_id:
+            raise HTTPException(status_code=422, detail="base_story_id is required for partial regeneration")
+        base_scenes = _load_base_scenes(payload.base_story_id, len(slots), payload.start_position)
     writer_base_url = payload.writer_base_url or WRITER_BASE_URL
     system_prompt = None
     if payload.prompt_preset_id:
@@ -72,6 +99,9 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
                 workspace_id=payload.workspace_id,
                 scene_length=payload.scene_length,
                 include_images=payload.include_images,
+                base_scenes=base_scenes,
+                start_position=payload.start_position,
+                mode=payload.mode,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except LlmError as error:

@@ -83,6 +83,8 @@ export interface StorySummary {
   plot: string | null
   target_tone: string | null
   workspace_id: string | null
+  parent_story_id: string | null
+  scene_count: number
   created_at: string
 }
 
@@ -191,6 +193,8 @@ export type GenerateEvent =
       prose: string
       state_after: StoryStateSnapshot
       is_fixed: boolean
+      reused: boolean
+      stale: boolean
     }
   | { type: 'done'; story_id: string }
   | { type: 'error'; message: string }
@@ -209,6 +213,9 @@ export interface GenerateInput {
   prompt_preset_id: string | null
   scene_length: SceneLength | null
   include_images: boolean
+  base_story_id: string | null
+  start_position: number
+  mode: 'full' | 'from_here' | 'single'
 }
 
 export function cardFileUrl(cardId: string, thumb: boolean): string {
