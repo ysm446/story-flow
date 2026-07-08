@@ -1,4 +1,5 @@
 import { useUiSettings } from '../store/settings'
+import { IconX } from './icons'
 import { PromptManager } from './PromptManager'
 
 /**
@@ -17,7 +18,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           aria-label="閉じる"
           className="rounded px-2 py-1 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
         >
-          ✕
+          <IconX size={14} />
         </button>
       </div>
 

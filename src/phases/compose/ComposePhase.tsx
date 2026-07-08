@@ -15,6 +15,7 @@ import {
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { IconFilm, IconPencil } from '../../components/icons'
 import {
   api,
   cardFileUrl,
@@ -149,21 +150,23 @@ function AnchorNode({ data, selected }: NodeProps) {
             }}
           />
           {card.media_type === 'video' && (
-            <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">🎬</span>
+            <span className="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white/90">
+              <IconFilm size={11} />
+            </span>
           )}
         </div>
       )}
       <div className="px-2.5 py-2">
         <div className="truncate text-[12px] font-medium">{card.title}</div>
-        <div className="mt-1 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1.5">
           {card.role && (
             <span className="rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
               {ROLE_LABELS[card.role]}
             </span>
           )}
           {instruction?.trim() && (
-            <span className="text-[10px]" title="この作品での追加指示あり">
-              📝
+            <span className="text-[var(--text-dim)]" title="この作品での追加指示あり">
+              <IconPencil size={10} />
             </span>
           )}
         </div>
@@ -559,7 +562,9 @@ function ComposeInner() {
                       }}
                     />
                     {card.media_type === 'video' && (
-                      <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-0.5 text-[9px]">🎬</span>
+                      <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 p-0.5 text-white/90">
+                        <IconFilm size={9} />
+                      </span>
                     )}
                   </>
                 ) : (

@@ -1,8 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 /**
- * アプリ設定（UI 環境設定）。localStorage に永続化する。
- * サーバ・モデル関連はセットアップパネル（Electron main 管理）、こちらは表示・演出の設定。
+ * アプリ設定（UI 環境設定）。data/settings.json に永続化する（Electron main が読み書き）。
+ * サーバ・モデル関連はセットアップパネル、こちらは表示・演出の設定。
  */
 export interface UiSettings {
   /** Generate: カードの画像を writer に見せて描写に反映する（vision 対応モデルのみ有効） */
@@ -34,17 +34,8 @@ const DEFAULT_SETTINGS: UiSettings = {
   statusMonitorVisible: true
 }
 
-const STORAGE_KEY = 'story-flow:ui-settings'
-
-function loadSettings(): UiSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_SETTINGS
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<UiSettings>) }
-  } catch {
-    return DEFAULT_SETTINGS
-  }
-}
+// 旧保存先（localStorage）からの移行用
+const LEGACY_STORAGE_KEY = 'story-flow:ui-settings'
 
 interface SettingsStore {
   settings: UiSettings
@@ -54,7 +45,31 @@ interface SettingsStore {
 const SettingsContext = createContext<SettingsStore | null>(null)
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<UiSettings>(loadSettings)
+  const [settings, setSettings] = useState<UiSettings>(DEFAULT_SETTINGS)
+
+  // 起動時に data/settings.json から読み込む（旧 localStorage の値があれば移行）
+  useEffect(() => {
+    let canceled = false
+    void (async () => {
+      try {
+        let loaded = (await window.storyFlow.loadUiSettings()) as Partial<UiSettings>
+        if (Object.keys(loaded).length === 0) {
+          const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+          if (legacy) {
+            loaded = JSON.parse(legacy) as Partial<UiSettings>
+            void window.storyFlow.saveUiSettings({ ...DEFAULT_SETTINGS, ...loaded })
+            localStorage.removeItem(LEGACY_STORAGE_KEY)
+          }
+        }
+        if (!canceled) setSettings({ ...DEFAULT_SETTINGS, ...loaded })
+      } catch {
+        // 読み込み失敗は既定値で続行
+      }
+    })()
+    return () => {
+      canceled = true
+    }
+  }, [])
 
   const value = useMemo(
     () => ({
@@ -62,11 +77,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       updateSettings: (patch: Partial<UiSettings>) => {
         setSettings((prev) => {
           const next = { ...prev, ...patch }
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-          } catch {
-            // 永続化失敗はセッション内設定として続行
-          }
+          void window.storyFlow.saveUiSettings(next as unknown as Record<string, unknown>).catch(() => undefined)
           return next
         })
       }

@@ -1,4 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  IconMaximize,
+  IconPause,
+  IconPlay,
+  IconSkipBack,
+  IconSkipForward,
+  IconTrash,
+  IconX
+} from '../../components/icons'
 import { api, cardFileUrl, type Card, type StoryDetail, type StorySummary, type WorkspaceSummary } from '../../lib/api'
 import { useUiSettings } from '../../store/settings'
 
@@ -253,17 +262,18 @@ export function TheaterPhase() {
               <button
                 onClick={() => void handlePlay(story.id)}
                 disabled={loadingId !== null}
-                className="shrink-0 rounded bg-[var(--accent)] px-3 py-1.5 text-[13px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+                className="flex shrink-0 items-center gap-1.5 rounded bg-[var(--accent)] px-3 py-1.5 text-[13px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
               >
-                {loadingId === story.id ? '読み込み中…' : '▶ 再生'}
+                <IconPlay size={12} />
+                {loadingId === story.id ? '読み込み中…' : '再生'}
               </button>
               <button
                 onClick={() => void handleDelete(story)}
                 disabled={loadingId !== null}
                 aria-label="削除"
-                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-1.5 text-[13px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-1.5 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
               >
-                🗑
+                <IconTrash size={14} />
               </button>
             </li>
           ))}
@@ -506,16 +516,16 @@ function StoryPlayer({
             onClick={() => void toggleFullscreen()}
             aria-label={isFullscreen ? '全画面を解除' : '全画面'}
             title={isFullscreen ? '全画面を解除（F / Esc）' : '全画面（F）'}
-            className="rounded bg-black/40 px-2.5 py-1 text-[14px] text-white/80 hover:bg-black/60"
+            className="flex items-center rounded bg-black/40 px-2.5 py-1.5 text-white/80 hover:bg-black/60"
           >
-            ⛶
+            <IconMaximize size={14} />
           </button>
           <button
             onClick={onExit}
             aria-label="終了"
-            className="rounded bg-black/40 px-2.5 py-1 text-[14px] text-white/80 hover:bg-black/60"
+            className="flex items-center rounded bg-black/40 px-2.5 py-1.5 text-white/80 hover:bg-black/60"
           >
-            ✕
+            <IconX size={14} />
           </button>
         </div>
       </div>
@@ -530,23 +540,23 @@ function StoryPlayer({
           onClick={() => goTo(index - 1)}
           disabled={index === 0}
           aria-label="前のシーン"
-          className="rounded bg-black/40 px-2.5 py-1 text-[13px] text-white/80 hover:bg-black/60 disabled:opacity-30"
+          className="flex items-center rounded bg-black/40 px-2.5 py-1.5 text-white/80 hover:bg-black/60 disabled:opacity-30"
         >
-          ⏮
+          <IconSkipBack size={13} />
         </button>
         <button
           onClick={() => setPaused((prev) => !prev)}
           aria-label={paused ? '再生' : '一時停止'}
-          className="rounded bg-black/40 px-3 py-1 text-[13px] text-white/80 hover:bg-black/60"
+          className="flex items-center rounded bg-black/40 px-3 py-1.5 text-white/80 hover:bg-black/60"
         >
-          {paused ? '▶' : '⏸'}
+          {paused ? <IconPlay size={13} /> : <IconPause size={13} />}
         </button>
         <button
           onClick={() => goTo(index + 1)}
           aria-label="次のシーン"
-          className="rounded bg-black/40 px-2.5 py-1 text-[13px] text-white/80 hover:bg-black/60"
+          className="flex items-center rounded bg-black/40 px-2.5 py-1.5 text-white/80 hover:bg-black/60"
         >
-          ⏭
+          <IconSkipForward size={13} />
         </button>
         <div className="ml-2 flex gap-1.5">
           {scenes.map((item, i) => (

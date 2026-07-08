@@ -7,6 +7,7 @@ import type {
   LlamaReleaseVariant,
   LlamaServerStatus
 } from '../../electron/main/types'
+import { IconX } from './icons'
 
 interface SetupPanelProps {
   settings: AppSettings | null
@@ -126,7 +127,7 @@ export function SetupPanel({
           aria-label="閉じる"
           className="rounded px-2 py-1 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
         >
-          ✕
+          <IconX size={14} />
         </button>
       </div>
 

@@ -24,5 +24,7 @@ contextBridge.exposeInMainWorld('storyFlow', {
   installLlamaServer: (variant: unknown) => ipcRenderer.invoke('llama:install', variant),
   cancelLlamaInstall: () => ipcRenderer.invoke('llama:install-cancel'),
   onLlamaInstallProgress: (callback: (payload: unknown) => void) => subscribe('llama:install-progress', callback),
-  onSystemResources: (callback: (payload: unknown) => void) => subscribe('system:resources', callback)
+  onSystemResources: (callback: (payload: unknown) => void) => subscribe('system:resources', callback),
+  loadUiSettings: () => ipcRenderer.invoke('uiSettings:load'),
+  saveUiSettings: (settings: unknown) => ipcRenderer.invoke('uiSettings:save', settings)
 })

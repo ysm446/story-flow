@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AppSettings, BackendStatus, EmbeddingStatus, LlamaServerStatus } from '../electron/main/types'
+import { IconSettings } from './components/icons'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SetupPanel } from './components/SetupPanel'
 import { StatusBar } from './components/StatusBar'
@@ -144,13 +145,13 @@ function AppShell() {
             onClick={() => setRightPanel((panel) => (panel === 'settings' ? null : 'settings'))}
             aria-label="設定"
             title="設定"
-            className={`rounded border px-2.5 py-1.5 text-[13px] ${
+            className={`flex items-center rounded border px-2.5 py-1.5 ${
               rightPanel === 'settings'
                 ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
                 : 'border-[var(--border-strong)] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
             }`}
           >
-            ⚙
+            <IconSettings size={15} />
           </button>
         </div>
       </header>

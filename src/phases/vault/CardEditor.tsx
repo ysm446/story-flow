@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { IconFilm, IconPlay } from '../../components/icons'
 import { api, cardFileUrl, type Card, type CardInput, type CardRole, type CardTag, type CardTone, type TagType } from '../../lib/api'
 
 const ROLE_OPTIONS: Array<{ value: CardRole | ''; label: string }> = [
@@ -233,9 +234,13 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
                       }}
                     />
                     <span className="absolute inset-0 flex items-center justify-center">
-                      <span className="rounded-full bg-black/55 px-3 py-2 text-[16px]">▶</span>
+                      <span className="rounded-full bg-black/55 p-2.5 text-white/90">
+                        <IconPlay size={18} />
+                      </span>
                     </span>
-                    <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">🎬</span>
+                    <span className="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white/90">
+                      <IconFilm size={11} />
+                    </span>
                   </div>
                 )
               ) : (

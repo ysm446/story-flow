@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { SystemResources } from '../../electron/main/types'
 import { useUiSettings } from '../store/settings'
+import { IconActivity } from './icons'
 
 function fmtBytes(bytes: number): string {
   const gb = bytes / 1024 ** 3
@@ -73,11 +74,11 @@ export function StatusBar({ backendHealthy, modelLabel }: { backendHealthy: bool
           onClick={() => updateSettings({ statusMonitorVisible: !settings.statusMonitorVisible })}
           aria-label={settings.statusMonitorVisible ? 'リソース表示をオフ' : 'リソース表示をオン'}
           title={settings.statusMonitorVisible ? 'リソース表示をオフ' : 'リソース表示をオン'}
-          className={`rounded px-1.5 py-0.5 text-[12px] hover:bg-[var(--bg-elevated)] ${
+          className={`flex items-center rounded px-1.5 py-0.5 hover:bg-[var(--bg-elevated)] ${
             settings.statusMonitorVisible ? 'text-[var(--text-dim)]' : 'text-[var(--text-faint)] opacity-60'
           }`}
         >
-          📈
+          <IconActivity size={13} />
         </button>
       </div>
     </footer>

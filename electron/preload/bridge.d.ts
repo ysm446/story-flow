@@ -34,6 +34,8 @@ export interface StoryFlowBridge {
   cancelLlamaInstall(): Promise<{ ok: true }>
   onLlamaInstallProgress(callback: (payload: LlamaInstallProgress) => void): () => void
   onSystemResources(callback: (payload: SystemResources) => void): () => void
+  loadUiSettings(): Promise<Record<string, unknown>>
+  saveUiSettings(settings: Record<string, unknown>): Promise<{ ok: boolean }>
 }
 
 declare global {

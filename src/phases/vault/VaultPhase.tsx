@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { IconAlert, IconFile, IconFilm } from '../../components/icons'
 import { api, cardFileUrl, type Card, type CardRole, type VaultStats } from '../../lib/api'
 import { CardEditor, pickMediaFile } from './CardEditor'
 
@@ -231,21 +232,23 @@ export function VaultPhase() {
                           }}
                         />
                         {card.media_type === 'video' && (
-                          <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">
-                            🎬
+                          <span className="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white/90">
+                            <IconFilm size={11} />
                           </span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-[20px] opacity-30">📄</span>
+                      <span className="opacity-30">
+                        <IconFile size={22} />
+                      </span>
                     )}
                   </div>
                   <div className="px-2.5 py-2">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-[13px] font-medium">{card.title}</span>
                       {!card.has_embedding && (
-                        <span className="shrink-0 text-[10px] text-[var(--danger)]" title="埋め込み未計算">
-                          ⚠
+                        <span className="shrink-0 text-[var(--danger)]" title="埋め込み未計算">
+                          <IconAlert size={11} />
                         </span>
                       )}
                     </div>

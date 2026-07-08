@@ -10,7 +10,8 @@ import {
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { api, type Card, type GenerateEvent, type StorySummary } from '../../lib/api'
+import { IconFilm, IconRotate, IconTrash } from '../../components/icons'
+import { api, cardFileUrl, type Card, type GenerateEvent, type StorySummary } from '../../lib/api'
 import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
 import { useUiSettings } from '../../store/settings'
@@ -31,6 +32,7 @@ type RegenMode = 'from_here' | 'single'
 interface SceneNodeData {
   index: number
   scene: SceneView
+  card: Card | undefined
   isRunning: boolean
   hasTake: boolean
   onRegenerate: (index: number, mode: RegenMode) => void
@@ -45,7 +47,7 @@ const STATUS_LABELS: Record<SceneStatus, string | null> = {
 }
 
 function SceneNode({ data }: NodeProps) {
-  const { index, scene, isRunning, hasTake, onRegenerate } = data as unknown as SceneNodeData
+  const { index, scene, card, isRunning, hasTake, onRegenerate } = data as unknown as SceneNodeData
   const statusLabel = STATUS_LABELS[scene.status]
 
   return (
@@ -59,6 +61,24 @@ function SceneNode({ data }: NodeProps) {
       }`}
     >
       <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-[var(--accent)]" />
+      {card?.media_path && (
+        <div className="relative h-[92px] overflow-hidden bg-[var(--bg-canvas)]">
+          <img
+            src={cardFileUrl(card.id, true)}
+            alt=""
+            className="h-full w-full object-cover"
+            draggable={false}
+            onError={(event) => {
+              event.currentTarget.style.visibility = 'hidden'
+            }}
+          />
+          {card.media_type === 'video' && (
+            <span className="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white/90">
+              <IconFilm size={11} />
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-2 border-b border-[var(--border)] px-2.5 py-1.5">
         <span className="text-[11px] font-semibold text-[var(--text-faint)]">{index + 1}</span>
         <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{scene.title}</span>
@@ -95,17 +115,17 @@ function SceneNode({ data }: NodeProps) {
           onClick={() => onRegenerate(index, 'single')}
           disabled={isRunning || !hasTake}
           title="このシーンだけ書き直す（以降のシーンはそのまま。確定事実がずれる可能性あり）"
-          className="flex-1 rounded border border-[var(--border-strong)] px-1 py-1 text-[10px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-40"
+          className="flex flex-1 items-center justify-center gap-1 rounded border border-[var(--border-strong)] px-1 py-1 text-[10px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-40"
         >
-          ↻ このシーンのみ
+          <IconRotate size={10} /> このシーンのみ
         </button>
         <button
           onClick={() => onRegenerate(index, 'from_here')}
           disabled={isRunning || !hasTake}
           title="このシーンから最後までを書き直す"
-          className="flex-1 rounded border border-[var(--border-strong)] px-1 py-1 text-[10px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-40"
+          className="flex flex-1 items-center justify-center gap-1 rounded border border-[var(--border-strong)] px-1 py-1 text-[10px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-40"
         >
-          ↻ ここから最後まで
+          <IconRotate size={10} /> ここから最後まで
         </button>
       </div>
       <Handle type="source" position={Position.Right} className="!h-3 !w-3 !bg-[var(--accent)]" />
@@ -326,6 +346,7 @@ function GenerateInner() {
         data: {
           index,
           scene,
+          card: cardById.get(scene.cardId),
           isRunning,
           hasTake: currentTakeId !== null,
           onRegenerate: handleRegenerate
@@ -402,11 +423,11 @@ function GenerateInner() {
                 disabled={isRunning}
                 className="min-w-0 flex-1 text-left disabled:opacity-50"
               >
-                <span className="block truncate text-[12px]">
+                <span className="flex items-center gap-1 truncate text-[12px]">
                   テイク {takes.length - index}
                   {take.parent_story_id && (
-                    <span className="ml-1 text-[10px] text-[var(--text-faint)]" title="部分再生成から生まれたテイク">
-                      ↻
+                    <span className="text-[var(--text-faint)]" title="部分再生成から生まれたテイク">
+                      <IconRotate size={9} />
                     </span>
                   )}
                 </span>
@@ -419,9 +440,9 @@ function GenerateInner() {
                 onClick={() => void handleDeleteTake(take)}
                 disabled={isRunning}
                 aria-label="テイクを削除"
-                className="shrink-0 rounded px-1 py-0.5 text-[11px] text-[var(--text-faint)] hover:bg-[var(--bg-elevated)] hover:text-[var(--danger)] disabled:opacity-40"
+                className="shrink-0 rounded px-1 py-0.5 text-[var(--text-faint)] hover:bg-[var(--bg-elevated)] hover:text-[var(--danger)] disabled:opacity-40"
               >
-                🗑
+                <IconTrash size={12} />
               </button>
             </div>
           ))}

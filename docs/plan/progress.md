@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 05:04
+更新日時: 2026-07-09 05:13
 
 ## 現在地
 
@@ -228,6 +228,15 @@ Vault → Compose → Generate → Theater が一本つながった。
   システムリソース（CPU/RAM/GPU/VRAM。lm-graph の nvidia-smi + os.cpus 方式を
   electron/main/systemResources.ts に移植、1 秒毎 push）と 📈 での表示オンオフ（設定に永続）
 - 2026-07-09: Generate ノードを内部スクロールから「文章の長さに合わせて縦に伸びる」表示に変更
+
+- 2026-07-09: **アイコンのフラット化** — 絵文字（⚙📈🎬🗑▶⛶ 等）を線画 SVG アイコンセット
+  （src/components/icons.tsx、stroke: currentColor）に総入れ替え。今後アプリ内アイコンは
+  必ずこのセットを使う（絵文字はカラーグリフで UI から浮くため）
+- 2026-07-09: Generate ノードにサムネイル表示を追加（Compose ノードと同じヘッダ画像 + 動画バッジ）
+
+- 2026-07-09: UI 設定の保存先を localStorage から **data/settings.json** に変更（作者要望）。
+  読み書きは Electron main（uiSettings:load/save IPC）。旧 localStorage の値は初回起動時に
+  自動移行して削除
 
 ## 未完了（plan.md の作業順序に従う）
 

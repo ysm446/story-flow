@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { BackendManager } from './backend'
@@ -13,6 +14,7 @@ let embeddingServer: EmbeddingServerManager | null = null
 let backend: BackendManager | null = null
 let llamaInstallController: AbortController | null = null
 let stopResourcePolling: (() => void) | null = null
+let uiSettingsPath: string | null = null
 
 function getLlamaServer(): LlamaServerManager {
   if (!llamaServer) throw new Error('Llama server manager is not initialized yet.')
@@ -76,6 +78,7 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   const rootDir = resolveAppRoot()
+  uiSettingsPath = join(rootDir, 'data', 'settings.json')
   llamaServer = new LlamaServerManager()
   embeddingServer = new EmbeddingServerManager(rootDir)
   // 埋め込みサーバのポートを確定させてからバックエンドに URL を注入する
@@ -120,6 +123,22 @@ function registerIpc(): void {
 
   ipcMain.handle('backend:status', async () => backendManager.getStatus())
   ipcMain.handle('backend:ensure', async () => backendManager.ensureRunning())
+
+  // UI 設定は data/settings.json に保存する
+  ipcMain.handle('uiSettings:load', async () => {
+    if (!uiSettingsPath) return {}
+    try {
+      return JSON.parse(await readFile(uiSettingsPath, 'utf-8')) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  })
+  ipcMain.handle('uiSettings:save', async (_event, settings: Record<string, unknown>) => {
+    if (!uiSettingsPath) return { ok: false as const }
+    await mkdir(join(uiSettingsPath, '..'), { recursive: true })
+    await writeFile(uiSettingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf-8')
+    return { ok: true as const }
+  })
 
   // Theater の全画面再生用
   ipcMain.handle('window:setFullScreen', (event, value: boolean) => {
