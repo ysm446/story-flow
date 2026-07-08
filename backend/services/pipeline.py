@@ -20,7 +20,7 @@ from backend.services.writer import write_scene
 
 
 def generate_stream(
-    cards: list[dict],
+    slots: list[dict],
     plot: str,
     target_tone: str | None,
     writer_base_url: str,
@@ -30,15 +30,18 @@ def generate_stream(
 ) -> Iterator[dict]:
     """アンカー列（v1: FIXED のみ）を左から逐次清書し、シーン毎に dict を yield する。
 
+    slots: [{"card": カード dict, "instruction": その作品でのシーンへの追加指示 | None}]
+
     yield するイベント:
       {"type": "scene", "position", "total", "card_id", "card_title", "prose", "state_after", "is_fixed"}
       {"type": "done", "story_id"}
     """
     state = StoryState.empty()
     scenes: list[dict] = []
-    total = len(cards)
+    total = len(slots)
 
-    for index, card in enumerate(cards):
+    for index, slot in enumerate(slots):
+        card = slot["card"]
         position = "opening" if index == 0 else ("ending" if index == total - 1 else "middle")
         prose, state = write_scene(
             card=card,
@@ -49,6 +52,7 @@ def generate_stream(
             base_url=writer_base_url,
             system_prompt=system_prompt,
             scene_length=scene_length,
+            instruction=slot.get("instruction"),
         )
         scene = {
             "position": index,

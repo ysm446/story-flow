@@ -57,10 +57,11 @@ def write_scene(
     base_url: str,
     system_prompt: str,
     scene_length: str | None = None,
+    instruction: str | None = None,
 ) -> tuple[str, StoryState]:
     """カード 1 枚を清書し、(prose, 更新後 StoryState) を返す。"""
     system = f"{system_prompt.strip()}\n\n{OUTPUT_FORMAT_INSTRUCTION}"
-    user = _build_user_prompt(card, state, plot, target_tone, position, scene_length)
+    user = _build_user_prompt(card, state, plot, target_tone, position, scene_length, instruction)
 
     result = chat_completion_json(base_url, system, user)
 
@@ -80,6 +81,7 @@ def _build_user_prompt(
     target_tone: str | None,
     position: str,
     scene_length: str | None = None,
+    instruction: str | None = None,
 ) -> str:
     parts: list[str] = []
     if plot.strip():
@@ -90,10 +92,9 @@ def _build_user_prompt(
         + json.dumps(state.snapshot(), ensure_ascii=False, indent=2)
     )
 
-    scene_info = [
-        f"- 位置: {POSITION_LABELS.get(position, position)}",
-        f"- ロール: {card.get('role')}",
-    ]
+    scene_info = [f"- 位置: {POSITION_LABELS.get(position, position)}"]
+    if card.get("role"):
+        scene_info.append(f"- ロール: {card.get('role')}")
     if scene_length in SCENE_LENGTH_CHARS:
         scene_info.append(f"- 目安の長さ: 約 {SCENE_LENGTH_CHARS[scene_length]} 字（多少前後してよい）")
     if position == "ending" and target_tone:
@@ -101,5 +102,7 @@ def _build_user_prompt(
     parts.append("## 今回のシーン\n" + "\n".join(scene_info))
 
     parts.append(f"## このシーンのブリーフ（作者の指示・アイデア）\n{card.get('brief', '')}")
-    parts.append("上記ブリーフを、確定事実と矛盾しない 1 シーンの地の文に清書してください。")
+    if instruction and instruction.strip():
+        parts.append(f"## この作品でのこのシーンへの追加指示\n{instruction.strip()}")
+    parts.append("上記ブリーフ（と追加指示があればそれも）を、確定事実と矛盾しない 1 シーンの地の文に清書してください。")
     return "\n\n".join(parts)

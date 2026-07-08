@@ -85,3 +85,30 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             "ALTER TABLE workspaces ADD COLUMN scene_length TEXT"
             " CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL)"
         )
+
+    # cards.role の任意化（NOT NULL 制約の除去は SQLite ではテーブル再構築が必要）
+    cards_columns = list(conn.execute("PRAGMA table_info(cards)"))
+    role_column = next((column for column in cards_columns if column["name"] == "role"), None)
+    if role_column is not None and role_column["notnull"]:
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.executescript(
+            """
+            CREATE TABLE cards_new (
+              id          TEXT PRIMARY KEY,
+              title       TEXT NOT NULL,
+              brief       TEXT NOT NULL,
+              media_path  TEXT,
+              media_type  TEXT CHECK(media_type IN ('image','video')),
+              role        TEXT CHECK(role IN ('intro','rising','turn','climax','ending') OR role IS NULL),
+              tone        TEXT CHECK(tone IN ('happy','bad','bitter','neutral') OR tone IS NULL),
+              created_at  TEXT NOT NULL,
+              updated_at  TEXT NOT NULL
+            );
+            INSERT INTO cards_new
+              SELECT id, title, brief, media_path, media_type, role, tone, created_at, updated_at FROM cards;
+            DROP TABLE cards;
+            ALTER TABLE cards_new RENAME TO cards;
+            """
+        )
+        conn.execute("PRAGMA foreign_keys = ON")

@@ -41,7 +41,7 @@ export function GeneratePhase() {
   }, [])
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
-  const anchors = composition.anchorCardIds
+  const anchors = composition.anchors
   const isRunning = status === 'starting-model' || status === 'generating'
 
   const handleGenerate = async () => {
@@ -64,7 +64,7 @@ export function GeneratePhase() {
       await postSse<GenerateEvent>(
         '/generate',
         {
-          card_ids: anchors,
+          slots: anchors.map((anchor) => ({ card_id: anchor.cardId, instruction: anchor.instruction })),
           plot: composition.plot,
           target_tone: composition.targetTone || null,
           writer_base_url: settings.llamaBaseUrl,
@@ -123,16 +123,21 @@ export function GeneratePhase() {
             </div>
           ) : (
             <ol className="space-y-1.5">
-              {anchors.map((cardId, index) => {
-                const card = cardById.get(cardId)
+              {anchors.map((anchor, index) => {
+                const card = cardById.get(anchor.cardId)
                 return (
                   <li
-                    key={cardId}
+                    key={anchor.cardId}
                     className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2.5 py-1.5"
                   >
                     <span className="w-5 shrink-0 text-center text-[12px] text-[var(--text-faint)]">{index + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-[13px]">{card?.title ?? cardId}</span>
-                    {card && (
+                    <span className="min-w-0 flex-1 truncate text-[13px]">{card?.title ?? anchor.cardId}</span>
+                    {anchor.instruction && (
+                      <span className="shrink-0 text-[11px]" title={anchor.instruction}>
+                        📝
+                      </span>
+                    )}
+                    {card?.role && (
                       <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
                         {ROLE_LABELS[card.role]}
                       </span>
@@ -200,13 +205,13 @@ export function GeneratePhase() {
         )}
 
         <div className="mt-3 space-y-3">
-          {anchors.map((cardId, index) => {
-            const card = cardById.get(cardId)
+          {anchors.map((anchor, index) => {
+            const card = cardById.get(anchor.cardId)
             const scene = scenes.find((item) => item.position === index)
             const isNext = !scene && scenes.length === index && isRunning
             return (
               <div
-                key={cardId}
+                key={anchor.cardId}
                 className={`rounded-md border px-4 py-3 ${
                   scene
                     ? 'border-[var(--border)] bg-[var(--bg-card)]'

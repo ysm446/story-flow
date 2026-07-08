@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, cardFileUrl, type Card, type CardInput, type CardRole, type CardTag, type CardTone, type TagType } from '../../lib/api'
 
-const ROLE_OPTIONS: Array<{ value: CardRole; label: string }> = [
+const ROLE_OPTIONS: Array<{ value: CardRole | ''; label: string }> = [
+  { value: '', label: '自動（指定しない）' },
   { value: 'intro', label: '導入' },
   { value: 'rising', label: '展開' },
   { value: 'turn', label: '転換' },
@@ -53,7 +54,7 @@ function textToTags(text: string, tagType: TagType): CardTag[] {
 export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClose }: CardEditorProps) {
   const [title, setTitle] = useState(card?.title ?? '')
   const [brief, setBrief] = useState(card?.brief ?? '')
-  const [role, setRole] = useState<CardRole>(card?.role ?? 'intro')
+  const [role, setRole] = useState<CardRole | ''>(card?.role ?? '')
   const [tone, setTone] = useState<CardTone | ''>(card?.tone ?? '')
   const [tagTexts, setTagTexts] = useState<Record<TagType, string>>({
     place: tagsToText(card?.tags ?? [], 'place'),
@@ -73,7 +74,7 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
   useEffect(() => {
     setTitle(card?.title ?? '')
     setBrief(card?.brief ?? '')
-    setRole(card?.role ?? 'intro')
+    setRole(card?.role ?? '')
     setTone(card?.tone ?? '')
     setTagTexts({
       place: tagsToText(card?.tags ?? [], 'place'),
@@ -90,7 +91,7 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
   const buildInput = (): CardInput => ({
     title: title.trim(),
     brief: brief.trim(),
-    role,
+    role: role || null,
     tone: role === 'ending' && tone ? tone : null,
     tags: TAG_FIELDS.flatMap(({ type }) => textToTags(tagTexts[type], type))
   })
@@ -291,8 +292,8 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
 
         <div className="flex gap-3">
           <label className="block flex-1">
-            <span className="mb-1 block text-[12px] text-[var(--text-dim)]">ロール（物語上の役割）</span>
-            <select value={role} onChange={(event) => setRole(event.target.value as CardRole)} className={inputClass}>
+            <span className="mb-1 block text-[12px] text-[var(--text-dim)]">ロール（任意）</span>
+            <select value={role} onChange={(event) => setRole(event.target.value as CardRole | '')} className={inputClass}>
               {ROLE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}

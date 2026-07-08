@@ -43,8 +43,8 @@ function resolveAppRoot(): string {
 
 function createWindow(): void {
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: 1920,
+    height: 1080,
     useContentSize: true,
     minWidth: 1200,
     minHeight: 800,

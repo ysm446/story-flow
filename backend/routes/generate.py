@@ -21,8 +21,13 @@ from backend.services.prompts import effective_prompt, preset_content
 router = APIRouter(tags=["generate"])
 
 
+class SlotInput(BaseModel):
+    card_id: str
+    instruction: str | None = None  # この作品でのこのシーンへの追加指示（ノードのプロパティ）
+
+
 class GenerateInput(BaseModel):
-    card_ids: list[str] = Field(min_length=1)
+    slots: list[SlotInput] = Field(min_length=1)
     plot: str = ""
     target_tone: Literal["happy", "bad", "bitter", "neutral"] | None = None
     writer_base_url: str | None = None  # 未指定なら環境変数 STORY_FLOW_WRITER_URL
@@ -31,23 +36,23 @@ class GenerateInput(BaseModel):
     scene_length: Literal["short", "standard", "long"] | None = None  # シーンの目安の長さ
 
 
-def _load_cards(card_ids: list[str]) -> list[dict]:
+def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
     conn = get_connection()
     try:
-        cards = []
-        for card_id in card_ids:
-            row = conn.execute("SELECT * FROM cards WHERE id = ?", (card_id,)).fetchone()
+        slots = []
+        for slot in slot_inputs:
+            row = conn.execute("SELECT * FROM cards WHERE id = ?", (slot.card_id,)).fetchone()
             if row is None:
-                raise HTTPException(status_code=404, detail=f"card not found: {card_id}")
-            cards.append(dict(row))
-        return cards
+                raise HTTPException(status_code=404, detail=f"card not found: {slot.card_id}")
+            slots.append({"card": dict(row), "instruction": slot.instruction})
+        return slots
     finally:
         conn.close()
 
 
 @router.post("/generate")
 def generate_story(payload: GenerateInput) -> StreamingResponse:
-    cards = _load_cards(payload.card_ids)
+    slots = _load_slots(payload.slots)
     writer_base_url = payload.writer_base_url or WRITER_BASE_URL
     system_prompt = None
     if payload.prompt_preset_id:
@@ -58,7 +63,7 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
     def event_stream():
         try:
             for event in generate_stream(
-                cards=cards,
+                slots=slots,
                 plot=payload.plot,
                 target_tone=payload.target_tone,
                 writer_base_url=writer_base_url,

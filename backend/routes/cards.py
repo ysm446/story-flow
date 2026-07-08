@@ -39,7 +39,7 @@ class TagInput(BaseModel):
 class CardInput(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     brief: str = Field(min_length=1, max_length=500)
-    role: Literal["intro", "rising", "turn", "climax", "ending"]
+    role: Literal["intro", "rising", "turn", "climax", "ending"] | None = None  # None = 自動/汎用
     tone: Literal["happy", "bad", "bitter", "neutral"] | None = None
     tags: list[TagInput] = Field(default_factory=list)
 
@@ -178,8 +178,12 @@ def vault_stats() -> dict:
     conn = get_connection()
     try:
         by_role = {role: 0 for role in ROLES}
+        unassigned = 0
         for row in conn.execute("SELECT role, COUNT(*) AS count FROM cards GROUP BY role"):
-            by_role[row["role"]] = row["count"]
+            if row["role"] is None:
+                unassigned = row["count"]
+            else:
+                by_role[row["role"]] = row["count"]
 
         embedded = conn.execute(
             "SELECT COUNT(*) AS count FROM card_vec WHERE card_id IN (SELECT id FROM cards)"
@@ -191,7 +195,13 @@ def vault_stats() -> dict:
         ):
             tags[row["tag_type"]].append({"value": row["value"], "count": row["count"]})
 
-        return {"total": sum(by_role.values()), "by_role": by_role, "embedded": embedded, "tags": tags}
+        return {
+            "total": sum(by_role.values()) + unassigned,
+            "by_role": by_role,
+            "unassigned": unassigned,
+            "embedded": embedded,
+            "tags": tags,
+        }
     finally:
         conn.close()
 

@@ -185,7 +185,9 @@ export function VaultPhase() {
                 </button>
               ))}
               <span className="ml-2">
-                全 {stats.total} 枚 ・ 埋め込み済み {stats.embedded} 枚
+                全 {stats.total} 枚
+                {stats.unassigned > 0 && `（ロール未設定 ${stats.unassigned} 枚)`}
+                ・ 埋め込み済み {stats.embedded} 枚
                 {stats.total > stats.embedded && (
                   <span className="text-[var(--danger)]">（未計算 {stats.total - stats.embedded} 枚）</span>
                 )}
@@ -251,9 +253,11 @@ export function VaultPhase() {
                       {card.brief}
                     </div>
                     <div className="mt-1.5 flex items-center gap-1 text-[10px]">
-                      <span className="rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[var(--text-dim)]">
-                        {ROLE_LABELS[card.role]}
-                      </span>
+                      {card.role && (
+                        <span className="rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[var(--text-dim)]">
+                          {ROLE_LABELS[card.role]}
+                        </span>
+                      )}
                       {card.tone && (
                         <span className="rounded-full bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[var(--text-faint)]">
                           {TONE_LABELS[card.tone]}

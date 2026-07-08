@@ -1,7 +1,7 @@
 # story-flow — 仕様書 (spec.md)
 
 作成日時: 2026-07-08 16:27
-更新日時: 2026-07-09 00:59
+更新日時: 2026-07-09 04:19
 
 短編ストーリー生成・鑑賞アプリ。作者が事前に「シーンカード」を大量に用意し、
 始点・終点（と任意の中間点）を置くと、ローカル LLM が在庫カードから間を埋め、
@@ -126,8 +126,8 @@ CREATE TABLE cards (
   brief       TEXT NOT NULL,              -- ~200字。LLMへの指示/アイデア（清書の入力）
   media_path  TEXT,                       -- ライブラリルート以下の相対パス（media/xxx）
   media_type  TEXT CHECK(media_type IN ('image','video')),
-  role        TEXT NOT NULL               -- 物語上の役割
-              CHECK(role IN ('intro','rising','turn','climax','ending')),
+  role        TEXT                        -- 物語上の役割（任意。NULL = 自動/汎用。2026-07-09 任意化）
+              CHECK(role IN ('intro','rising','turn','climax','ending') OR role IS NULL),
   tone        TEXT                        -- ending カードのみ意味を持つ（終点タグ）
               CHECK(tone IN ('happy','bad','bitter','neutral') OR tone IS NULL),
   created_at  TEXT NOT NULL,
@@ -137,6 +137,9 @@ CREATE TABLE cards (
 
 - `role`: 導入 / 展開 / 転換 / クライマックス / 結末。純粋な意味的類似度だけで組むと
   「導入っぽいシーン」ばかり並ぶので、ロールを弧の骨格に使う。
+  - **2026-07-09 変更**: 作者の「縛られる感じ」を受けて**任意**にした（既定は未設定 = 自動/汎用）。
+    v1.5 の候補検索ではロールをハードフィルタではなくスコアのボーナスとして使い、
+    未設定カードは汎用として扱う。
 - `tone`: 終点タグ。v1 では ending カードに付けておくだけ（分岐は使わない）。v1.5 で「目標
   トーンを先に決めてそこへ向かう」引力として使う。
 
@@ -219,8 +222,12 @@ CREATE TABLE workspaces (
 );
 ```
 
-- `graph` にはカード ID と座標・接続だけを保存し、カード本体は保存しない
-  （読み込み時に cards から再構成。削除済みカードのノードは落とす）。
+- `graph` にはカード ID と座標・接続、**ノードごとの追加指示（instruction）**を保存し、
+  カード本体は保存しない（読み込み時に cards から再構成。削除済みカードのノードは落とす）。
+- **ノードの追加指示（2026-07-09 追加）**: カードのブリーフは共有アセットの「素材の意図」、
+  ノードの instruction はその作品・その場面での「演出指示」。清書時に
+  「この作品でのこのシーンへの追加指示」として writer に渡す。同じカードを
+  別の作品で使い回しても作品ごとに違う味付けができる。
 - `stories.workspace_id`（NULL 可）で生成結果を作品に紐付ける。ワークスペース削除時、
   生成済みの物語は残して紐付けだけ外す。
 - Compose の編集は自動保存（デバウンス）でワークスペースに書き戻す。

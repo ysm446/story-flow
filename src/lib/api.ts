@@ -44,7 +44,7 @@ export interface Card {
   brief: string
   media_path: string | null
   media_type: 'image' | 'video' | null
-  role: CardRole
+  role: CardRole | null // null = 自動/汎用
   tone: CardTone | null
   created_at: string
   updated_at: string
@@ -56,7 +56,7 @@ export interface Card {
 export interface CardInput {
   title: string
   brief: string
-  role: CardRole
+  role: CardRole | null
   tone: CardTone | null
   tags: CardTag[]
 }
@@ -65,6 +65,7 @@ export interface VaultStats {
   total: number
   embedded: number
   by_role: Record<CardRole, number>
+  unassigned: number
   tags: Record<TagType, Array<{ value: string; count: number }>>
 }
 
@@ -89,6 +90,8 @@ export interface WorkspaceGraphNode {
   id: string
   x: number
   y: number
+  /** この作品でのこのシーンへの追加指示（ノードのプロパティ） */
+  instruction?: string | null
 }
 
 export interface WorkspaceGraphEdge {
@@ -191,8 +194,13 @@ export type GenerateEvent =
   | { type: 'done'; story_id: string }
   | { type: 'error'; message: string }
 
+export interface GenerateSlot {
+  card_id: string
+  instruction: string | null
+}
+
 export interface GenerateInput {
-  card_ids: string[]
+  slots: GenerateSlot[]
   plot: string
   target_tone: CardTone | null
   writer_base_url: string | null

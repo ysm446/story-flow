@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS cards (
   brief       TEXT NOT NULL,              -- ~200字。LLMへの指示/アイデア（清書の入力）
   media_path  TEXT,                       -- ライブラリルート以下の相対パス（media/xxx）
   media_type  TEXT CHECK(media_type IN ('image','video')),
-  role        TEXT NOT NULL               -- 物語上の役割
-              CHECK(role IN ('intro','rising','turn','climax','ending')),
+  role        TEXT                        -- 物語上の役割（任意。NULL = 自動/汎用。2026-07-09 任意化）
+              CHECK(role IN ('intro','rising','turn','climax','ending') OR role IS NULL),
   tone        TEXT                        -- ending カードのみ意味を持つ（終点タグ）
               CHECK(tone IN ('happy','bad','bitter','neutral') OR tone IS NULL),
   created_at  TEXT NOT NULL,

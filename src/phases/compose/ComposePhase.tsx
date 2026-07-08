@@ -123,8 +123,13 @@ export function ComposePhase() {
   )
 }
 
+interface AnchorNodeData {
+  card: Card
+  instruction?: string
+}
+
 function AnchorNode({ data, selected }: NodeProps) {
-  const card = (data as { card: Card }).card
+  const { card, instruction } = data as unknown as AnchorNodeData
   return (
     <div
       className={`w-[190px] overflow-hidden rounded-md border bg-[var(--bg-card)] ${
@@ -150,9 +155,18 @@ function AnchorNode({ data, selected }: NodeProps) {
       )}
       <div className="px-2.5 py-2">
         <div className="truncate text-[12px] font-medium">{card.title}</div>
-        <span className="mt-1 inline-block rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
-          {ROLE_LABELS[card.role]}
-        </span>
+        <div className="mt-1 flex items-center gap-1">
+          {card.role && (
+            <span className="rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
+              {ROLE_LABELS[card.role]}
+            </span>
+          )}
+          {instruction?.trim() && (
+            <span className="text-[10px]" title="この作品での追加指示あり">
+              📝
+            </span>
+          )}
+        </div>
       </div>
       <Handle type="source" position={Position.Right} className="!h-3 !w-3 !bg-[var(--accent)]" />
     </div>
@@ -187,13 +201,18 @@ function computeChain(nodes: Node[], edges: Edge[]): { orderedIds: string[] | nu
   return { orderedIds: ordered, reason: null }
 }
 
-/** ワークスペースの graph（ID + 座標）を、実在するカードで React Flow ノードに復元する */
+/** ワークスペースの graph（ID + 座標 + 指示文）を、実在するカードで React Flow ノードに復元する */
 function hydrateGraph(graph: WorkspaceGraph, cardById: Map<string, Card>): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   for (const item of graph.nodes ?? []) {
     const card = cardById.get(item.id)
     if (!card) continue // 削除済みカードのノードは落とす
-    nodes.push({ id: item.id, type: 'anchor', position: { x: item.x, y: item.y }, data: { card } })
+    nodes.push({
+      id: item.id,
+      type: 'anchor',
+      position: { x: item.x, y: item.y },
+      data: { card, instruction: item.instruction ?? '' }
+    })
   }
   const nodeIds = new Set(nodes.map((node) => node.id))
   const edges: Edge[] = (graph.edges ?? [])
@@ -204,7 +223,12 @@ function hydrateGraph(graph: WorkspaceGraph, cardById: Map<string, Card>): { nod
 
 function serializeGraph(nodes: Node[], edges: Edge[]): WorkspaceGraph {
   return {
-    nodes: nodes.map((node) => ({ id: node.id, x: node.position.x, y: node.position.y })),
+    nodes: nodes.map((node) => ({
+      id: node.id,
+      x: node.position.x,
+      y: node.position.y,
+      instruction: ((node.data as unknown as AnchorNodeData).instruction ?? '').trim() || null
+    })),
     edges: edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
   }
 }
@@ -238,7 +262,7 @@ function ComposeInner() {
       setNodes(nextNodes)
       setEdges(nextEdges)
       setComposition({
-        anchorCardIds: [],
+        anchors: [],
         plot: workspace.plot,
         targetTone: workspace.target_tone ?? '',
         promptPresetId: workspace.prompt_preset_id,
@@ -408,10 +432,18 @@ function ComposeInner() {
   const placedIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes])
   const palette = allCards.filter((card) => !placedIds.has(card.id))
   const chain = useMemo(() => computeChain(nodes, edges), [nodes, edges])
+  const selectedNode = nodes.find((node) => node.selected)
+  const selectedNodeData = selectedNode ? (selectedNode.data as unknown as AnchorNodeData) : null
 
   const addCardNode = (card: Card) => {
     const position = { x: 80 + (nodes.length % 4) * 230, y: 120 + Math.floor(nodes.length / 4) * 190 }
-    setNodes((prev) => [...prev, { id: card.id, type: 'anchor', position, data: { card } }])
+    setNodes((prev) => [...prev, { id: card.id, type: 'anchor', position, data: { card, instruction: '' } }])
+  }
+
+  const updateNodeInstruction = (nodeId: string, instruction: string) => {
+    setNodes((prev) =>
+      prev.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, instruction } } : node))
+    )
   }
 
   // 一本鎖の制約: 出力・入力とも 1 本まで、循環は禁止
@@ -441,7 +473,12 @@ function ComposeInner() {
     } catch {
       // 保存失敗でも生成は続行できる（次の自動保存でリトライされる）
     }
-    setComposition({ ...composition, anchorCardIds: chain.orderedIds })
+    const anchors = chain.orderedIds.map((cardId) => {
+      const node = nodes.find((item) => item.id === cardId)
+      const instruction = node ? ((node.data as unknown as AnchorNodeData).instruction ?? '').trim() : ''
+      return { cardId, instruction: instruction || null }
+    })
+    setComposition({ ...composition, anchors })
     setPendingGenerate(true)
     setPhase('generate')
   }
@@ -507,11 +544,31 @@ function ComposeInner() {
             <button
               key={card.id}
               onClick={() => addCardNode(card)}
-              className="flex w-full items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-card)] px-2 py-1.5 text-left hover:border-[var(--border-strong)]"
+              className="flex w-full items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-card)] p-1.5 text-left hover:border-[var(--border-strong)]"
             >
-              <span className="min-w-0 flex-1 truncate text-[12px]">{card.title}</span>
-              <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
-                {ROLE_LABELS[card.role]}
+              <span className="relative h-10 w-14 shrink-0 overflow-hidden rounded bg-[var(--bg-canvas)]">
+                {card.media_path ? (
+                  <>
+                    <img
+                      src={`${cardFileUrl(card.id, true)}&v=${encodeURIComponent(card.updated_at)}`}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.visibility = 'hidden'
+                      }}
+                    />
+                    {card.media_type === 'video' && (
+                      <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-0.5 text-[9px]">🎬</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-[14px] opacity-30">📄</span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px]">{card.title}</span>
+                <span className="block truncate text-[10px] text-[var(--text-faint)]">{card.brief}</span>
               </span>
             </button>
           ))}
@@ -544,8 +601,44 @@ function ComposeInner() {
         </div>
       </div>
 
-      {/* 生成設定 */}
+      {/* 生成設定 + 選択ノードのプロパティ */}
       <aside className="flex w-[280px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-sidebar)]">
+        {selectedNode && selectedNodeData && (
+          <div className="border-b border-[var(--border)]">
+            <div className="px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">ノードのプロパティ</div>
+            <div className="space-y-2 px-3 pb-3">
+              <div className="flex items-center gap-2">
+                {selectedNodeData.card.media_path && (
+                  <img
+                    src={cardFileUrl(selectedNodeData.card.id, true)}
+                    alt=""
+                    className="h-9 w-12 shrink-0 rounded object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.visibility = 'hidden'
+                    }}
+                  />
+                )}
+                <span className="min-w-0 truncate text-[13px] font-medium">{selectedNodeData.card.title}</span>
+              </div>
+              <p className="max-h-16 overflow-y-auto text-[11px] leading-relaxed text-[var(--text-faint)]">
+                {selectedNodeData.card.brief}
+              </p>
+              <label className="block">
+                <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
+                  この作品での追加指示（任意。清書時にブリーフへ加えられる）
+                </span>
+                <textarea
+                  value={selectedNodeData.instruction ?? ''}
+                  onChange={(event) => updateNodeInstruction(selectedNode.id, event.target.value)}
+                  rows={4}
+                  placeholder="例: ここは回想として書く。雨の描写を引きずる。"
+                  className={`${inputClass} leading-relaxed`}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+
         <div className="border-b border-[var(--border)] px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">
           生成設定
         </div>
