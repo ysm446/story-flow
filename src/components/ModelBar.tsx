@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { AppSettings, ModelOption } from '../../electron/main/types'
 import { IconChevronDown, IconCpu, IconEject, IconSpinner } from './icons'
 
@@ -88,56 +89,63 @@ export function ModelBar({
         </button>
       )}
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
-          className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 p-6 pt-20"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-6"
           onClick={() => setIsOpen(false)}
         >
           <div
-            className="relative w-full max-w-lg rounded-xl border border-[var(--border-strong)] bg-[var(--bg-sidebar)] p-4 shadow-2xl"
+            className="relative w-full max-w-xl rounded-xl border border-[var(--border-strong)] bg-[var(--bg-sidebar)] p-4 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[13px] font-semibold text-[var(--text-dim)]">モデルを選択</h2>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold">モデルを選択</h2>
               <button
                 onClick={() => setIsOpen(false)}
-                className="rounded border border-[var(--border-strong)] px-2.5 py-1 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                className="rounded-lg border border-[var(--border-strong)] px-2.5 py-1 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
               >
                 閉じる
               </button>
             </div>
 
-            <div className="max-h-[360px] space-y-1 overflow-y-auto">
+            <div className="mt-1 max-h-[380px] space-y-1 overflow-y-auto">
+              <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                models/ 内のモデル
+              </div>
               {models.map((model) => {
                 const isActive = loaded && model.path === settings?.selectedModelPath
+                const folder = model.name.split(/[\\/]/).slice(0, -1).join('/') || 'models/'
                 return (
                   <button
                     key={model.path}
                     onClick={() => void selectModel(model)}
                     disabled={busy}
-                    className={`block w-full rounded-lg border px-3 py-2 text-left transition disabled:cursor-wait disabled:opacity-60 ${
+                    className={`block w-full rounded-lg border px-3 py-2.5 text-left transition disabled:cursor-wait disabled:opacity-60 ${
                       isActive
                         ? 'border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--text)]'
                         : 'border-transparent text-[var(--text-dim)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-semibold">
-                        {model.name}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-[var(--text-faint)]">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="truncate font-mono text-[13px] font-semibold leading-5">
+                          {displayName(model.name)}
+                        </div>
+                        <div className="mt-0.5 truncate text-[10px] text-[var(--text-faint)]">{folder}</div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 text-[11px] text-[var(--text-faint)]">
                         {model.metadata.parameterLabel && (
-                          <span className="rounded bg-[var(--bg-input)] px-1.5 py-0.5">
+                          <span className="rounded-md bg-[var(--bg-input)] px-2 py-0.5 font-semibold text-[var(--text-dim)]">
                             {model.metadata.parameterLabel}
                           </span>
                         )}
                         {model.metadata.quantizationLabel && (
-                          <span className="rounded bg-[var(--bg-input)] px-1.5 py-0.5">
+                          <span className="rounded-md bg-[var(--bg-input)] px-2 py-0.5 font-semibold text-[var(--text-dim)]">
                             {model.metadata.quantizationLabel}
                           </span>
                         )}
                         <span>{formatBytes(model.sizeBytes)}</span>
-                      </span>
+                      </div>
                     </div>
                   </button>
                 )
@@ -162,10 +170,16 @@ export function ModelBar({
 
             {error && <p className="mt-3 text-[12px] text-[var(--danger)]">{error}</p>}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
+}
+
+/** パス付きのモデル名からファイル名（末尾）だけを取り出す */
+function displayName(name: string): string {
+  return name.split(/[\\/]/).pop() ?? name
 }
 
 function formatBytes(bytes: number): string {
