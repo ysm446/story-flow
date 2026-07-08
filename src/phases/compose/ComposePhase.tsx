@@ -9,6 +9,7 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type Node,
@@ -256,6 +257,8 @@ function ComposeInner() {
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
   const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null)
   const hydrated = useRef(false)
+  const reactFlow = useReactFlow()
+  const canvasRef = useRef<HTMLDivElement>(null)
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
 
@@ -439,7 +442,20 @@ function ComposeInner() {
   const selectedNodeData = selectedNode ? (selectedNode.data as unknown as AnchorNodeData) : null
 
   const addCardNode = (card: Card) => {
-    const position = { x: 80 + (nodes.length % 4) * 230, y: 120 + Math.floor(nodes.length / 4) * 190 }
+    // 現在のビューポート（カメラ）中央に配置する
+    let position = { x: 120, y: 120 }
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (rect) {
+      const center = reactFlow.screenToFlowPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      })
+      position = { x: center.x - 95, y: center.y - 70 } // ノード（幅 190）の中心を合わせる
+    }
+    // 連続追加やノードが既にある位置とは重ならないよう少しずらす
+    while (nodes.some((node) => Math.abs(node.position.x - position.x) < 24 && Math.abs(node.position.y - position.y) < 24)) {
+      position = { x: position.x + 28, y: position.y + 28 }
+    }
     setNodes((prev) => [...prev, { id: card.id, type: 'anchor', position, data: { card, instruction: '' } }])
   }
 
@@ -581,7 +597,7 @@ function ComposeInner() {
       </aside>
 
       {/* キャンバス */}
-      <div className="relative min-w-0 flex-1">
+      <div ref={canvasRef} className="relative min-w-0 flex-1">
         <ReactFlow
           nodes={nodes}
           edges={edges}

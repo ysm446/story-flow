@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconFilm, IconPlay } from '../../components/icons'
 import { api, cardFileUrl, type Card, type CardInput, type CardRole, type CardTag, type CardTone, type TagType } from '../../lib/api'
 
@@ -148,11 +148,22 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
     }
   }
 
-  const previewUrl = pendingFile
-    ? URL.createObjectURL(pendingFile)
-    : card?.media_path
-      ? `${cardFileUrl(card.id, true)}&v=${encodeURIComponent(card.updated_at)}`
-      : null
+  // オブジェクト URL はファイル単位でメモ化する。
+  // レンダー毎に作り直すと <video> の src が変わって再生が先頭に戻る（+ URL リーク）
+  const pendingFileUrl = useMemo(() => (pendingFile ? URL.createObjectURL(pendingFile) : null), [pendingFile])
+  // 解放は「前のファイルの URL」のみ。effect のクリーンアップで現行 URL を revoke すると
+  // StrictMode の 2 重実行（実行→クリーンアップ→再実行）で生きている URL を殺してしまう
+  const prevPendingUrl = useRef<string | null>(null)
+  useEffect(() => {
+    if (prevPendingUrl.current && prevPendingUrl.current !== pendingFileUrl) {
+      URL.revokeObjectURL(prevPendingUrl.current)
+    }
+    prevPendingUrl.current = pendingFileUrl
+  }, [pendingFileUrl])
+
+  const previewUrl =
+    pendingFileUrl ??
+    (card?.media_path ? `${cardFileUrl(card.id, true)}&v=${encodeURIComponent(card.updated_at)}` : null)
 
   const inputClass =
     'w-full rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-[13px] focus:outline focus:outline-1 focus:outline-[var(--accent-border)]'

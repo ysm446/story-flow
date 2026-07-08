@@ -7,6 +7,7 @@ import {
   ReactFlowProvider,
   type Edge,
   type Node,
+  type NodeChange,
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -157,7 +158,22 @@ function GenerateInner() {
   const [sceneViews, setSceneViews] = useState<SceneView[]>([])
   const [status, setStatus] = useState<RunStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [positionOverrides, setPositionOverrides] = useState<Record<string, { x: number; y: number }>>({})
   const autoStarted = useRef(false)
+
+  // ドラッグでの移動を受け付ける（ノードは毎レンダー再構築するため、位置だけ上書きで保持）
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    setPositionOverrides((prev) => {
+      let next = prev
+      for (const change of changes) {
+        if (change.type === 'position' && change.position) {
+          next = next === prev ? { ...prev } : next
+          next[change.id] = change.position
+        }
+      }
+      return next
+    })
+  }, [])
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
   const isRunning = status === 'starting-model' || status === 'generating'
@@ -334,11 +350,13 @@ function GenerateInner() {
     }
   }
 
-  // ノード配置: Compose のカード位置を引き継ぎ、無ければ横一列
+  // ノード配置: ドラッグでの移動 > Compose のカード位置 > 横一列 の優先順
   const { nodes, edges } = useMemo(() => {
     const nodes: Node[] = sceneViews.map((scene, index) => {
       const composeNode = composeNodes.find((item) => item.id === scene.cardId)
-      const position = composeNode ? { ...composeNode.position } : { x: 60 + index * 340, y: 160 }
+      const position =
+        positionOverrides[`scene-${index}`] ??
+        (composeNode ? { ...composeNode.position } : { x: 60 + index * 340, y: 160 })
       return {
         id: `scene-${index}`,
         type: 'scene',
@@ -360,7 +378,7 @@ function GenerateInner() {
       type: 'smoothstep'
     }))
     return { nodes, edges }
-  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate])
+  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, positionOverrides])
 
   return (
     <div className="flex h-full">
@@ -455,6 +473,7 @@ function GenerateInner() {
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
+          onNodesChange={handleNodesChange}
           nodesConnectable={false}
           minZoom={0.2}
           maxZoom={1.5}
