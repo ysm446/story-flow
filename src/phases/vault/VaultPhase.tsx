@@ -218,16 +218,22 @@ export function VaultPhase() {
                 >
                   <div className="flex aspect-video items-center justify-center overflow-hidden bg-[var(--bg-canvas)]">
                     {card.media_path ? (
-                      card.media_type === 'video' ? (
-                        <span className="text-[12px] text-[var(--text-faint)]">🎬 動画</span>
-                      ) : (
+                      <div className="relative h-full w-full">
                         <img
                           src={`${cardFileUrl(card.id, true)}&v=${encodeURIComponent(card.updated_at)}`}
                           alt=""
                           loading="lazy"
                           className="h-full w-full object-cover"
+                          onError={(event) => {
+                            event.currentTarget.style.visibility = 'hidden'
+                          }}
                         />
-                      )
+                        {card.media_type === 'video' && (
+                          <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">
+                            🎬
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-[20px] opacity-30">📄</span>
                     )}

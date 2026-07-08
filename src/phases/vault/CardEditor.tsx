@@ -190,8 +190,22 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
             {isDragOver ? (
               <span className="pointer-events-none text-[13px] text-[var(--text)]">ここにドロップ</span>
             ) : previewUrl ? (
-              pendingFile?.type.startsWith('video') || (!pendingFile && card?.media_type === 'video') ? (
-                <span className="text-[13px] text-[var(--text-dim)]">動画: {pendingFile?.name ?? card?.media_path}</span>
+              pendingFile?.type.startsWith('video') ? (
+                // 選択直後の動画はその場で再生プレビュー
+                <video src={previewUrl} muted autoPlay loop playsInline className="pointer-events-none h-full w-full object-cover" />
+              ) : !pendingFile && card?.media_type === 'video' ? (
+                // 保存済みの動画はサムネイル + バッジ
+                <div className="pointer-events-none relative h-full w-full">
+                  <img
+                    src={previewUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.visibility = 'hidden'
+                    }}
+                  />
+                  <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px]">🎬</span>
+                </div>
               ) : (
                 <img src={previewUrl} alt="" className="pointer-events-none h-full w-full object-cover" />
               )
