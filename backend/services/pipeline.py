@@ -1,22 +1,95 @@
-"""generate() — 逐次生成パイプライン（spec §6.1、中核）。
+"""generate — 逐次生成パイプライン（spec §6.1、中核）。
 
-選択と清書を 1 つの左→右ループに乗せる。一括生成は禁止（spec 判断）:
-  for slot in flatten(composition):
-      FIXED → そのカード / GAP → fill_gap()  # GAP は v1.5
-      prose, state = write_scene(card, state, target_tone, position)
-      used_ids に追加し、prev_card を更新
-
+選択と清書を 1 つの左→右ループに乗せる。一括生成は禁止（spec 判断）。
 v1 では GAP が存在しない（Compose はアンカーのみ）ため FIXED だけを回す。
-保存は save_story() で行い、清書結果は index しない。
+v1.5 で GAP スロットに fill_gap（services/selection.py）を差し込む。
 
-TODO(フェーズ 2): 実装。SSE でシーン単位に push できる generator 形式にする。
+清書結果は stories / story_scenes に保存するが index しない（spec §1.4）。
 """
 
 from __future__ import annotations
 
-from backend.services.state import StoryState  # noqa: F401  (実装時に使用)
+import json
+import uuid
+from collections.abc import Iterator
+from datetime import datetime, timezone
+
+from backend.db.database import get_connection
+from backend.services.state import StoryState
+from backend.services.writer import write_scene
 
 
-def generate(composition: dict, plot: str, target_tone: str | None) -> dict:
-    """composition（アンカー列）から物語 1 本を逐次生成して保存する。"""
-    raise NotImplementedError("フェーズ 2 で実装する")
+def generate_stream(
+    cards: list[dict],
+    plot: str,
+    target_tone: str | None,
+    writer_base_url: str,
+    system_prompt: str,
+) -> Iterator[dict]:
+    """アンカー列（v1: FIXED のみ）を左から逐次清書し、シーン毎に dict を yield する。
+
+    yield するイベント:
+      {"type": "scene", "position", "total", "card_id", "card_title", "prose", "state_after", "is_fixed"}
+      {"type": "done", "story_id"}
+    """
+    state = StoryState.empty()
+    scenes: list[dict] = []
+    total = len(cards)
+
+    for index, card in enumerate(cards):
+        position = "opening" if index == 0 else ("ending" if index == total - 1 else "middle")
+        prose, state = write_scene(
+            card=card,
+            state=state,
+            plot=plot,
+            target_tone=target_tone,
+            position=position,
+            base_url=writer_base_url,
+            system_prompt=system_prompt,
+        )
+        scene = {
+            "position": index,
+            "total": total,
+            "card_id": card["id"],
+            "card_title": card.get("title", ""),
+            "prose": prose,
+            "state_after": state.snapshot(),
+            "is_fixed": True,  # v1 はアンカーのみ。v1.5 の穴埋めシーンで False になる
+            "selection_reason": None,
+        }
+        scenes.append(scene)
+        yield {"type": "scene", **scene}
+
+    story_id = save_story(plot, target_tone, scenes)
+    yield {"type": "done", "story_id": story_id}
+
+
+def save_story(plot: str, target_tone: str | None, scenes: list[dict]) -> str:
+    """物語を保存する。保存のみで index はしない（spec §1.4 判断）。"""
+    conn = get_connection()
+    try:
+        story_id = str(uuid.uuid4())
+        conn.execute(
+            "INSERT INTO stories (id, plot, target_tone, created_at) VALUES (?, ?, ?, ?)",
+            (story_id, plot or None, target_tone, datetime.now(timezone.utc).isoformat()),
+        )
+        for scene in scenes:
+            conn.execute(
+                "INSERT INTO story_scenes"
+                " (id, story_id, position, card_id, prose, is_fixed, selection_reason, state_after)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    str(uuid.uuid4()),
+                    story_id,
+                    scene["position"],
+                    scene["card_id"],
+                    scene["prose"],
+                    1 if scene["is_fixed"] else 0,
+                    scene["selection_reason"],
+                    json.dumps(scene["state_after"], ensure_ascii=False),
+                ),
+            )
+        conn.commit()
+        return story_id
+    finally:
+        conn.close()

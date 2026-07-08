@@ -1,12 +1,12 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-08 23:14
+更新日時: 2026-07-08 23:51
 
 ## 現在地
 
-**フェーズ 1（Vault）完了**。カード CRUD・メディア・検索・在庫密度が動く状態。
-次はフェーズ 2（Generate の逐次パイプライン）。
+**フェーズ 2（Generate 逐次パイプライン）完了**。アンカー列 → 逐次清書 → 保存が
+実 LLM（gemma-4-31B）で動くことを確認済み。次はフェーズ 3（Theater）。
 
 ## 完了済み
 
@@ -59,27 +59,44 @@
   - 未検証: 埋め込みサーバ実起動での card_vec 書き込み（llama-server 未インストールの
     ため。UI からインストール後、カード保存時に自動計算される）
 
+- 2026-07-08: 埋め込み経路を実サーバで検証 — **EMBED_DIM 実測 2560（スキーマと一致）**。
+  カード保存で card_vec 書き込み、意味検索・類似検索の妥当な順位付けを確認
+- 2026-07-08: **フェーズ 2（Generate）完了**:
+  - backend: `services/llm.py`（chat_completion_json: response_format=json_object +
+    <think> 除去 + パース失敗リトライ）、`services/prompts.py`（既定 backend/prompts/*.md、
+    上書き data/prompts/*.md、出力形式指示は writer.py 側で必ず付与）、
+    `services/writer.py`（write_scene: prose + 更新後 state を単一の構造化出力で取得）、
+    `services/pipeline.py`（FIXED のみの左→右ループ、SSE 用 generator、save_story は
+    保存のみで index しない）、`routes/generate.py`（POST /generate を SSE 化）、
+    `routes/prompts.py`（GET/PUT /prompts/{writer,selector}）
+  - UI: Generate 画面（アンカー列の追加/並べ替え、プロット、目標トーン、生成前に
+    writer モデルを自動ロード、SSE でシーンが順に埋まる進行表示 + state_after ビュー）、
+    PromptEditor（上書き保存 / 既定に戻す）
+  - 検証: build / py_compile 成功。**実 LLM E2E**: gemma-4-31B で 3 シーン
+    （intro→turn→ending, target_tone=bitter）を逐次生成。events が 1→2→4 と積み上がり、
+    革鞄・老婦人などの確定事実が最終シーンまで矛盾なく引き継がれた。story 保存・取得・
+    削除、プロンプト GET/PUT/リセットも確認
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）
-- [ ] フェーズ 2: Generate 逐次パイプライン（穴埋めなし）
+- [x] フェーズ 2: Generate 逐次パイプライン（穴埋めなし）
 - [ ] フェーズ 3: Theater
 - [ ] フェーズ 4: Compose（→ v1 完成）
 - [ ] フェーズ 5: v1.5（fill_gap / 多様性 / バックトラック）
 
 ## 次の一手
 
-フェーズ 2（Generate 逐次パイプライン、穴埋めなし）:
-`services/llm.py`（chat_completion_json + think ブロック除去）→ `services/writer.py`
-（write_scene: prose + 更新後 state の構造化出力、prompts/writer.md 使用 + ユーザー上書き）→
-`services/pipeline.py`（FIXED のみの左→右ループ、SSE generator）→ `routes/generate.py`
-（POST /generate を SSE 化）→ Generate UI（アンカー選択は暫定でカード ID 列指定 or
-Vault から選択、シーンが埋まる進行表示）。生成用 system prompt の編集 UI もフェーズ 2 スコープ。
+フェーズ 3（Theater）: 生成済み story の鑑賞。履歴一覧（GET /stories）→ 再生ビュー
+（Ken Burns パン/ズーム + テキスト長に応じたオート送り + クロスフェード）。
+カードのメディア（/cards/{id}/file）をシーン背景に使う。シンプルに保つ（spec §10）。
 
-- 起動は `start.bat`（初回は venv + npm install を自動セットアップ）
-- 環境注意: この PC の `python` は Windows Store スタブのため `py` ランチャーを使う
-- Vault の埋め込み計算を有効にするには、セットアップパネルから llama-server をインストール
-  すること（embedding サーバはアプリ起動時に自動起動する）
+その後フェーズ 4（Compose: React Flow アンカー配置）で v1 完成。
+Generate 画面の暫定アンカー選択 UI は、Compose 完成後に composition ドラフトを
+受け取る形へ置き換える（store/appStore の CompositionDraft は共有済み）。
+
+- 起動は `start.bat`。環境注意: この PC の `python` は Store スタブのため `py` を使う
+- 生成中の清書プロンプトは Generate 画面の「清書プロンプトを編集」から上書きできる
 
 ## 注意点・申し送り
 

@@ -84,6 +84,43 @@ export interface StorySummary {
   created_at: string
 }
 
+export interface PromptInfo {
+  name: string
+  default: string
+  override: string | null
+  effective: string
+}
+
+export interface StoryStateSnapshot {
+  characters: Array<{ name: string; traits: string }>
+  items: string[]
+  events: string[]
+  location: string | null
+  time: string | null
+  tone_so_far: string | null
+}
+
+export type GenerateEvent =
+  | {
+      type: 'scene'
+      position: number
+      total: number
+      card_id: string
+      card_title: string
+      prose: string
+      state_after: StoryStateSnapshot
+      is_fixed: boolean
+    }
+  | { type: 'done'; story_id: string }
+  | { type: 'error'; message: string }
+
+export interface GenerateInput {
+  card_ids: string[]
+  plot: string
+  target_tone: CardTone | null
+  writer_base_url: string | null
+}
+
 export function cardFileUrl(cardId: string, thumb: boolean): string {
   return `${baseUrl}/cards/${cardId}/file?thumb=${thumb ? 1 : 0}`
 }
@@ -126,6 +163,11 @@ export const api = {
     request<{ cards: Card[] }>(`/cards/similar?text=${encodeURIComponent(text)}&k=${k}`),
 
   vaultStats: () => request<VaultStats>('/vault/stats'),
+
+  getPrompt: (name: 'writer' | 'selector') => request<PromptInfo>(`/prompts/${name}`),
+
+  setPrompt: (name: 'writer' | 'selector', override: string | null) =>
+    request<PromptInfo>(`/prompts/${name}`, { method: 'PUT', body: JSON.stringify({ override }) }),
 
   listStories: () => request<{ stories: StorySummary[] }>('/stories')
 }
