@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, cardFileUrl, type Card, type StoryDetail, type StorySummary } from '../../lib/api'
+import { useUiSettings } from '../../store/settings'
+
+// 本文ストリーミング（タイプライター演出）の 1 文字あたりの間隔
+const STREAM_INTERVAL_MS = 45
 
 const TONE_LABELS: Record<string, string> = {
   happy: 'ハッピー',
@@ -141,12 +145,29 @@ function StoryPlayer({
   onExit: () => void
 }) {
   const scenes = useMemo(() => [...story.scenes].sort((a, b) => a.position - b.position), [story.scenes])
+  const { settings: uiSettings } = useUiSettings()
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
   const [finished, setFinished] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
+  const [visibleChars, setVisibleChars] = useState(0)
 
   const scene = scenes[index]
+  const isStreaming = uiSettings.theaterTextStreaming
+
+  // 本文ストリーミング: シーン切替でリセットし、1 文字ずつ増やす（一時停止で止まる）
+  useEffect(() => {
+    setVisibleChars(0)
+  }, [index])
+
+  useEffect(() => {
+    if (!isStreaming || paused || finished || !scene) return
+    if (visibleChars >= scene.prose.length) return
+    const timer = setInterval(() => {
+      setVisibleChars((prev) => Math.min(prev + 1, scene.prose.length))
+    }, STREAM_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [isStreaming, paused, finished, scene, visibleChars >= (scene?.prose.length ?? 0)])
 
   const goTo = useCallback(
     (next: number) => {
@@ -230,11 +251,14 @@ function StoryPlayer({
         )
       })}
 
-      {/* 本文 */}
+      {/* 本文（ストリーミング時は全文で高さを確保し、上に可視分を重ねてレイアウトのずれを防ぐ） */}
       {!finished && scene && (
         <div key={scene.id} className="absolute inset-x-0 bottom-0 px-10 pb-14 pt-6">
-          <p className="mx-auto max-w-2xl whitespace-pre-wrap text-[16px] leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
-            {scene.prose}
+          <p className="relative mx-auto max-w-2xl whitespace-pre-wrap text-[16px] leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
+            <span className="invisible">{scene.prose}</span>
+            <span className="absolute inset-0 whitespace-pre-wrap">
+              {isStreaming ? scene.prose.slice(0, visibleChars) : scene.prose}
+            </span>
           </p>
         </div>
       )}

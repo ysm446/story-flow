@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import type { Edge, Node } from '@xyflow/react'
 
 export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 
@@ -17,6 +18,10 @@ interface AppStore {
   setPhase: (phase: PhaseId) => void
   composition: CompositionDraft
   setComposition: (draft: CompositionDraft) => void
+  /** Compose キャンバスの状態（タブ切替で消えないようにここで保持。永続化は今後の課題） */
+  composeNodes: Node[]
+  composeEdges: Edge[]
+  setComposeGraph: (nodes: Node[], edges: Edge[]) => void
 }
 
 const AppStoreContext = createContext<AppStore | null>(null)
@@ -24,10 +29,23 @@ const AppStoreContext = createContext<AppStore | null>(null)
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<PhaseId>('vault')
   const [composition, setComposition] = useState<CompositionDraft>({ anchorCardIds: [], plot: '' })
+  const [composeNodes, setComposeNodes] = useState<Node[]>([])
+  const [composeEdges, setComposeEdges] = useState<Edge[]>([])
 
   const value = useMemo(
-    () => ({ phase, setPhase, composition, setComposition }),
-    [phase, composition]
+    () => ({
+      phase,
+      setPhase,
+      composition,
+      setComposition,
+      composeNodes,
+      composeEdges,
+      setComposeGraph: (nodes: Node[], edges: Edge[]) => {
+        setComposeNodes(nodes)
+        setComposeEdges(edges)
+      }
+    }),
+    [phase, composition, composeNodes, composeEdges]
   )
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>

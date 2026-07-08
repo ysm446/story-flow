@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AppSettings, BackendStatus, EmbeddingStatus, LlamaServerStatus } from '../electron/main/types'
+import { SettingsPanel } from './components/SettingsPanel'
 import { SetupPanel } from './components/SetupPanel'
 import { api, configureApi } from './lib/api'
 import { ComposePhase } from './phases/compose/ComposePhase'
@@ -7,6 +8,7 @@ import { GeneratePhase } from './phases/generate/GeneratePhase'
 import { TheaterPhase } from './phases/theater/TheaterPhase'
 import { VaultPhase } from './phases/vault/VaultPhase'
 import { AppStoreProvider, useAppStore, type PhaseId } from './store/appStore'
+import { SettingsProvider } from './store/settings'
 
 const PHASES: Array<{ id: PhaseId; label: string }> = [
   { id: 'vault', label: 'Vault' },
@@ -18,10 +20,14 @@ const PHASES: Array<{ id: PhaseId; label: string }> = [
 export default function App() {
   return (
     <AppStoreProvider>
-      <AppShell />
+      <SettingsProvider>
+        <AppShell />
+      </SettingsProvider>
     </AppStoreProvider>
   )
 }
+
+type RightPanel = 'setup' | 'settings' | null
 
 function AppShell() {
   const { phase, setPhase } = useAppStore()
@@ -30,7 +36,7 @@ function AppShell() {
   const [embedding, setEmbedding] = useState<EmbeddingStatus | null>(null)
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
   const [backendHealthy, setBackendHealthy] = useState(false)
-  const [isSetupOpen, setIsSetupOpen] = useState(false)
+  const [rightPanel, setRightPanel] = useState<RightPanel>(null)
 
   // 初期化: Electron main から設定を取得し、API クライアントを構成する
   useEffect(() => {
@@ -43,7 +49,7 @@ function AppShell() {
       setLlamaStatus(payload.llamaStatus)
       setEmbedding(payload.embedding)
       // llama-server 未インストールなら初回からセットアップを開く
-      if (!payload.llamaStatus.installed) setIsSetupOpen(true)
+      if (!payload.llamaStatus.installed) setRightPanel('setup')
     })
     return () => {
       canceled = true
@@ -112,14 +118,26 @@ function AppShell() {
             <span className="max-w-[240px] truncate">{modelLabel}</span>
           </span>
           <button
-            onClick={() => setIsSetupOpen((open) => !open)}
+            onClick={() => setRightPanel((panel) => (panel === 'setup' ? null : 'setup'))}
             className={`rounded border px-3 py-1.5 text-[13px] ${
-              isSetupOpen
+              rightPanel === 'setup'
                 ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
                 : 'border-[var(--border-strong)] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
             }`}
           >
             セットアップ
+          </button>
+          <button
+            onClick={() => setRightPanel((panel) => (panel === 'settings' ? null : 'settings'))}
+            aria-label="設定"
+            title="設定"
+            className={`rounded border px-2.5 py-1.5 text-[13px] ${
+              rightPanel === 'settings'
+                ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
+                : 'border-[var(--border-strong)] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+            }`}
+          >
+            ⚙
           </button>
         </div>
       </header>
@@ -132,7 +150,7 @@ function AppShell() {
           {phase === 'theater' && <TheaterPhase />}
         </main>
 
-        {isSetupOpen && (
+        {rightPanel === 'setup' && (
           <SetupPanel
             settings={settings}
             llamaStatus={llamaStatus}
@@ -140,9 +158,10 @@ function AppShell() {
             onSettingsChange={setSettings}
             onLlamaStatusChange={setLlamaStatus}
             onEmbeddingChange={setEmbedding}
-            onClose={() => setIsSetupOpen(false)}
+            onClose={() => setRightPanel(null)}
           />
         )}
+        {rightPanel === 'settings' && <SettingsPanel onClose={() => setRightPanel(null)} />}
       </div>
     </div>
   )
