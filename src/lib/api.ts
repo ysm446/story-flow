@@ -81,7 +81,54 @@ export interface StorySummary {
   id: string
   plot: string | null
   target_tone: string | null
+  workspace_id: string | null
   created_at: string
+}
+
+export interface WorkspaceGraphNode {
+  id: string
+  x: number
+  y: number
+}
+
+export interface WorkspaceGraphEdge {
+  id: string
+  source: string
+  target: string
+}
+
+export interface WorkspaceGraph {
+  nodes: WorkspaceGraphNode[]
+  edges: WorkspaceGraphEdge[]
+}
+
+export interface WorkspaceSummary {
+  id: string
+  name: string
+  story_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Workspace {
+  id: string
+  name: string
+  graph: WorkspaceGraph
+  plot: string
+  target_tone: CardTone | null
+  prompt_preset_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkspaceUpdateInput {
+  name?: string
+  graph?: WorkspaceGraph
+  plot?: string
+  target_tone?: CardTone | null
+  clear_target_tone?: boolean
+  prompt_preset_id?: string | null
+  clear_prompt_preset?: boolean
 }
 
 export interface StoryScene {
@@ -144,6 +191,8 @@ export interface GenerateInput {
   plot: string
   target_tone: CardTone | null
   writer_base_url: string | null
+  workspace_id: string | null
+  prompt_preset_id: string | null
 }
 
 export function cardFileUrl(cardId: string, thumb: boolean): string {
@@ -212,7 +261,29 @@ export const api = {
       body: JSON.stringify({ preset_id: presetId })
     }),
 
-  listStories: () => request<{ stories: StorySummary[] }>('/stories'),
+  listStories: (workspaceId?: string) =>
+    request<{ stories: StorySummary[] }>(
+      `/stories${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`
+    ),
+
+  listWorkspaces: () => request<{ workspaces: WorkspaceSummary[] }>('/workspaces'),
+
+  createWorkspace: (name: string) =>
+    request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify({ name }) }),
+
+  getWorkspace: (workspaceId: string) => request<Workspace>(`/workspaces/${workspaceId}`),
+
+  updateWorkspace: (workspaceId: string, patch: WorkspaceUpdateInput) =>
+    request<Workspace>(`/workspaces/${workspaceId}`, { method: 'PUT', body: JSON.stringify(patch) }),
+
+  duplicateWorkspace: (workspaceId: string, name: string) =>
+    request<Workspace>(`/workspaces/${workspaceId}/duplicate`, {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    }),
+
+  deleteWorkspace: (workspaceId: string) =>
+    request<{ ok: boolean }>(`/workspaces/${workspaceId}`, { method: 'DELETE' }),
 
   getStory: (storyId: string) => request<StoryDetail>(`/stories/${storyId}`),
 

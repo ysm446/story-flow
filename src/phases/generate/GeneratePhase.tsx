@@ -28,7 +28,7 @@ type RunStatus = 'idle' | 'starting-model' | 'generating' | 'done' | 'error'
  * Compose の「生成する」から遷移した場合は自動で生成を開始する。
  */
 export function GeneratePhase() {
-  const { composition, setPhase, pendingGenerate, setPendingGenerate } = useAppStore()
+  const { composition, setPhase, pendingGenerate, setPendingGenerate, workspaceId } = useAppStore()
   const [allCards, setAllCards] = useState<Card[]>([])
   const [status, setStatus] = useState<RunStatus>('idle')
   const [scenes, setScenes] = useState<SceneEvent[]>([])
@@ -67,7 +67,9 @@ export function GeneratePhase() {
           card_ids: anchors,
           plot: composition.plot,
           target_tone: composition.targetTone || null,
-          writer_base_url: settings.llamaBaseUrl
+          writer_base_url: settings.llamaBaseUrl,
+          workspace_id: workspaceId,
+          prompt_preset_id: composition.promptPresetId
         },
         (event) => {
           if (event.type === 'scene') {

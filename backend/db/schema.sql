@@ -44,7 +44,23 @@ CREATE TABLE IF NOT EXISTS stories (
   id           TEXT PRIMARY KEY,
   plot         TEXT,                     -- 入力プロット
   target_tone  TEXT,                     -- 目標トーン（v1.5 で使用、v1 は NULL 可）
+  workspace_id TEXT REFERENCES workspaces(id),  -- 生成元ワークスペース（NULL 可）
   created_at   TEXT NOT NULL
+);
+
+-- 4.7 workspaces — 作品単位の編集状態（spec §4.7）
+-- Vault（cards）は全ワークスペース共通のアセット。構成・生成設定だけを作品ごとに持つ。
+-- graph はカード ID と座標のみ（{"nodes":[{"id","x","y"}],"edges":[{"id","source","target"}]}）。
+-- カード本体は保存せず、読み込み時に cards から再構成する（削除済みカードのノードは落とす）。
+CREATE TABLE IF NOT EXISTS workspaces (
+  id                TEXT PRIMARY KEY,
+  name              TEXT NOT NULL,
+  graph             TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+  plot              TEXT NOT NULL DEFAULT '',
+  target_tone       TEXT CHECK(target_tone IN ('happy','bad','bitter','neutral') OR target_tone IS NULL),
+  prompt_preset_id  TEXT,               -- NULL = 既定プロンプト
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
 );
 
 -- 4.6 story_scenes — 物語内の順序付きシーン

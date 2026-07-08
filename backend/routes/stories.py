@@ -10,10 +10,16 @@ router = APIRouter(tags=["stories"])
 
 
 @router.get("/stories")
-def list_stories() -> dict:
+def list_stories(workspace_id: str | None = None) -> dict:
     conn = get_connection()
     try:
-        rows = conn.execute("SELECT * FROM stories ORDER BY created_at DESC").fetchall()
+        if workspace_id:
+            rows = conn.execute(
+                "SELECT * FROM stories WHERE workspace_id = ? ORDER BY created_at DESC",
+                (workspace_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM stories ORDER BY created_at DESC").fetchall()
         return {"stories": [dict(row) for row in rows]}
     finally:
         conn.close()

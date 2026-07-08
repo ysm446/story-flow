@@ -25,6 +25,7 @@ def generate_stream(
     target_tone: str | None,
     writer_base_url: str,
     system_prompt: str,
+    workspace_id: str | None = None,
 ) -> Iterator[dict]:
     """アンカー列（v1: FIXED のみ）を左から逐次清書し、シーン毎に dict を yield する。
 
@@ -60,18 +61,18 @@ def generate_stream(
         scenes.append(scene)
         yield {"type": "scene", **scene}
 
-    story_id = save_story(plot, target_tone, scenes)
+    story_id = save_story(plot, target_tone, scenes, workspace_id)
     yield {"type": "done", "story_id": story_id}
 
 
-def save_story(plot: str, target_tone: str | None, scenes: list[dict]) -> str:
+def save_story(plot: str, target_tone: str | None, scenes: list[dict], workspace_id: str | None = None) -> str:
     """物語を保存する。保存のみで index はしない（spec §1.4 判断）。"""
     conn = get_connection()
     try:
         story_id = str(uuid.uuid4())
         conn.execute(
-            "INSERT INTO stories (id, plot, target_tone, created_at) VALUES (?, ?, ?, ?)",
-            (story_id, plot or None, target_tone, datetime.now(timezone.utc).isoformat()),
+            "INSERT INTO stories (id, plot, target_tone, workspace_id, created_at) VALUES (?, ?, ?, ?, ?)",
+            (story_id, plot or None, target_tone, workspace_id, datetime.now(timezone.utc).isoformat()),
         )
         for scene in scenes:
             conn.execute(

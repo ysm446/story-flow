@@ -13,11 +13,15 @@ export interface CompositionDraft {
   anchorCardIds: string[]
   plot: string
   targetTone: CardTone | ''
+  promptPresetId: string | null
 }
 
 interface AppStore {
   phase: PhaseId
   setPhase: (phase: PhaseId) => void
+  /** 現在編集中のワークスペース。Compose が読み書きし、Generate が生成時に紐付ける */
+  workspaceId: string | null
+  setWorkspaceId: (workspaceId: string | null) => void
   composition: CompositionDraft
   setComposition: (draft: CompositionDraft) => void
   /** Compose キャンバスの状態（タブ切替で消えないようにここで保持。永続化は今後の課題） */
@@ -33,10 +37,12 @@ const AppStoreContext = createContext<AppStore | null>(null)
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<PhaseId>('vault')
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [composition, setComposition] = useState<CompositionDraft>({
     anchorCardIds: [],
     plot: '',
-    targetTone: ''
+    targetTone: '',
+    promptPresetId: null
   })
   const [composeNodes, setComposeNodes] = useState<Node[]>([])
   const [composeEdges, setComposeEdges] = useState<Edge[]>([])
@@ -46,6 +52,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     () => ({
       phase,
       setPhase,
+      workspaceId,
+      setWorkspaceId,
       composition,
       setComposition,
       composeNodes,
@@ -57,7 +65,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       pendingGenerate,
       setPendingGenerate
     }),
-    [phase, composition, composeNodes, composeEdges, pendingGenerate]
+    [phase, workspaceId, composition, composeNodes, composeEdges, pendingGenerate]
   )
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>

@@ -67,6 +67,14 @@ def init_db() -> None:
     conn = get_connection()
     try:
         conn.executescript(schema)
+        _migrate_schema(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """既存 DB への追加カラムを条件付き ALTER で適用する（image-assistant と同方式）。"""
+    story_columns = {row["name"] for row in conn.execute("PRAGMA table_info(stories)")}
+    if "workspace_id" not in story_columns:
+        conn.execute("ALTER TABLE stories ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)")

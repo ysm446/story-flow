@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 00:48
+更新日時: 2026-07-09 01:03
 
 ## 現在地
 
@@ -119,6 +119,19 @@ Vault → Compose → Generate → Theater が一本つながった。
     アンカーの手動編集 UI は撤去。構成の編集は Compose に一本化）
   - CompositionDraft に targetTone を追加（Compose ⇄ Generate で共有）
 
+- 2026-07-09: **ワークスペース（作品単位の保存）を実装**（作者要望。spec §4.7 追加）:
+  - Vault は全ワークスペース共通アセット。ワークスペースは Compose グラフ（カード ID +
+    座標 + 接続のみ）・プロット・目標トーン・プロンプトプリセットを持つ
+  - backend: workspaces テーブル + CRUD/複製 API。既存 DB へは条件付き ALTER で
+    `stories.workspace_id` を追加。生成時に story を作品へ紐付け（削除時は紐付けだけ外す）
+  - Compose: 左サイドバー上部に作品の切替/新規/名前変更/複製/削除。編集はデバウンス
+    自動保存（保存状態表示付き）。グラフはカード ID から復元し、削除済みカードは落とす
+  - Theater: 作品での絞り込みセレクト + 履歴行に作品名バッジ
+  - プロンプトプリセットの選択は作品ごとに保存（生成はその作品のプリセットを使用）
+  - Compose キャンバス永続化の積み残しはこれで解消
+  - 検証: build / py_compile / workspaces API E2E（作成→更新→トーンクリア→複製→
+    一覧→stories フィルタ→削除、マイグレーション込み）成功。UI はアプリ確認待ち
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）
@@ -131,7 +144,7 @@ Vault → Compose → Generate → Theater が一本つながった。
 
 1. アプリで v1 を通し確認（Vault 登録 → Compose で繋ぐ → Generate → Theater 再生）し、
    使い勝手を調整（Ken Burns の動き量、オート送り・ストリーミング速度、Compose の操作感）
-2. 積み残しの検討: Compose キャンバスのディスク永続化、埋め込み未計算カードの一括再計算
+2. 積み残しの検討: 埋め込み未計算カードの一括再計算
 3. フェーズ 5（v1.5）: `fill_gap`（retrieve_candidates + select_card）。
    ロールはハードフィルタでなくスコアボーナス案を第一候補に（plan.md 参照）
 

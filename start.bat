@@ -1,47 +1,46 @@
 @echo off
 setlocal
-chcp 65001 >nul
 cd /d "%~dp0"
 
-echo === Story Flow 起動 ===
+echo === Story Flow ===
 
-rem --- Python コマンドの決定（py ランチャー優先。python は Store スタブの場合があるため） ---
+rem Prefer the py launcher (the "python" command may be a Windows Store stub)
 set "PY_CMD=py"
 where py >nul 2>nul
 if errorlevel 1 set "PY_CMD=python"
 
-rem --- Python venv（初回のみ作成 + 依存インストール） ---
+rem --- Python venv (first run only: create + install deps) ---
 if not exist ".venv\Scripts\python.exe" (
-    echo [setup] .venv を作成しています...
+    echo [setup] Creating .venv ...
     %PY_CMD% -m venv .venv
     if errorlevel 1 (
-        echo [error] venv の作成に失敗しました。Python がインストールされているか確認してください。
+        echo [error] Failed to create venv. Check that Python is installed.
         pause
         exit /b 1
     )
-    echo [setup] Python 依存をインストールしています...
+    echo [setup] Installing Python dependencies ...
     ".venv\Scripts\python.exe" -m pip install --upgrade pip
     ".venv\Scripts\python.exe" -m pip install -r backend\requirements.txt
     if errorlevel 1 (
-        echo [error] pip install に失敗しました。
+        echo [error] pip install failed.
         pause
         exit /b 1
     )
 )
 
-rem --- Node 依存（初回のみ） ---
+rem --- Node dependencies (first run only) ---
 if not exist "node_modules" (
-    echo [setup] npm install を実行しています...
+    echo [setup] Running npm install ...
     call npm install
     if errorlevel 1 (
-        echo [error] npm install に失敗しました。Node.js がインストールされているか確認してください。
+        echo [error] npm install failed. Check that Node.js is installed.
         pause
         exit /b 1
     )
 )
 
-rem --- アプリ起動（FastAPI は Electron main が venv の python で起動する） ---
-echo [run] アプリを起動します...
+rem --- Launch the app (FastAPI is started by the Electron main process) ---
+echo [run] Starting the app ...
 call npm run dev
 
 endlocal

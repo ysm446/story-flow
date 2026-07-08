@@ -160,3 +160,13 @@ def effective_prompt(kind: str) -> str:
             if preset["id"] == active_id:
                 return preset["content"]
     return _default_content(kind)
+
+
+def preset_content(kind: str, preset_id: str) -> str | None:
+    """指定 ID のプリセット本文。見つからなければ None（呼び出し側でフォールバック）。"""
+    _validate_kind(kind)
+    store = _load_store()
+    for preset in store[kind]["presets"]:
+        if preset["id"] == preset_id:
+            return preset["content"]
+    return None

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.db.database import init_db
-from backend.routes import cards, generate, prompts, stories
+from backend.routes import cards, generate, prompts, stories, workspaces
 
 
 @asynccontextmanager
@@ -35,6 +35,7 @@ app.include_router(cards.router)
 app.include_router(generate.router)
 app.include_router(prompts.router)
 app.include_router(stories.router)
+app.include_router(workspaces.router)
 
 
 @app.get("/health")

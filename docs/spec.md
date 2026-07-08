@@ -1,7 +1,7 @@
 # story-flow — 仕様書 (spec.md)
 
 作成日時: 2026-07-08 16:27
-更新日時: 2026-07-08 17:02
+更新日時: 2026-07-09 00:59
 
 短編ストーリー生成・鑑賞アプリ。作者が事前に「シーンカード」を大量に用意し、
 始点・終点（と任意の中間点）を置くと、ローカル LLM が在庫カードから間を埋め、
@@ -199,6 +199,31 @@ CREATE TABLE story_scenes (
   UNIQUE(story_id, position)
 );
 ```
+
+### 4.7 workspaces — 作品単位の編集状態（2026-07-09 追加）
+
+作者が「作品（ワークスペース）」単位で構成を切り替えて編集・保存できるようにする。
+**Vault（cards）は全ワークスペース共通のアセット**であり、ワークスペースに属さない。
+ワークスペースが持つのは構成（Compose グラフ）と生成設定だけ。
+
+```sql
+CREATE TABLE workspaces (
+  id                TEXT PRIMARY KEY,
+  name              TEXT NOT NULL,
+  graph             TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',  -- カードIDと座標・接続のみ
+  plot              TEXT NOT NULL DEFAULT '',
+  target_tone       TEXT CHECK(target_tone IN ('happy','bad','bitter','neutral') OR target_tone IS NULL),
+  prompt_preset_id  TEXT,               -- NULL = 既定プロンプト
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+```
+
+- `graph` にはカード ID と座標・接続だけを保存し、カード本体は保存しない
+  （読み込み時に cards から再構成。削除済みカードのノードは落とす）。
+- `stories.workspace_id`（NULL 可）で生成結果を作品に紐付ける。ワークスペース削除時、
+  生成済みの物語は残して紐付けだけ外す。
+- Compose の編集は自動保存（デバウンス）でワークスペースに書き戻す。
 
 ---
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, cardFileUrl, type Card, type StoryDetail, type StorySummary } from '../../lib/api'
+import { api, cardFileUrl, type Card, type StoryDetail, type StorySummary, type WorkspaceSummary } from '../../lib/api'
 import { useUiSettings } from '../../store/settings'
 
 // 本文ストリーミング（タイプライター演出）の 1 文字あたりの間隔
@@ -23,22 +23,33 @@ function sceneDurationMs(prose: string): number {
  */
 export function TheaterPhase() {
   const [stories, setStories] = useState<StorySummary[]>([])
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
+  const [workspaceFilter, setWorkspaceFilter] = useState('')
   const [playing, setPlaying] = useState<{ story: StoryDetail; cards: Map<string, Card> } | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const loadStories = useCallback(async () => {
     try {
-      const result = await api.listStories()
+      const result = await api.listStories(workspaceFilter || undefined)
       setStories(result.stories)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
-  }, [])
+  }, [workspaceFilter])
 
   useEffect(() => {
     void loadStories()
   }, [loadStories])
+
+  useEffect(() => {
+    void api.listWorkspaces().then((result) => setWorkspaces(result.workspaces)).catch(() => setWorkspaces([]))
+  }, [])
+
+  const workspaceName = useCallback(
+    (id: string | null) => (id ? workspaces.find((workspace) => workspace.id === id)?.name ?? null : null),
+    [workspaces]
+  )
 
   const handlePlay = async (storyId: string) => {
     setLoadingId(storyId)
@@ -84,6 +95,22 @@ export function TheaterPhase() {
         生成した物語を再生します。スペースで一時停止、← → でシーン移動、Esc で終了。
       </p>
 
+      {workspaces.length > 0 && (
+        <select
+          value={workspaceFilter}
+          onChange={(event) => setWorkspaceFilter(event.target.value)}
+          className="mt-4 rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-[13px]"
+          title="作品で絞り込み"
+        >
+          <option value="">すべての作品</option>
+          {workspaces.map((workspace) => (
+            <option key={workspace.id} value={workspace.id}>
+              {workspace.name}
+            </option>
+          ))}
+        </select>
+      )}
+
       {error && (
         <div className="mt-4 rounded-md border border-[var(--danger)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-[13px] text-[var(--danger)]">
           {error}
@@ -105,6 +132,11 @@ export function TheaterPhase() {
                 <div className="truncate text-[14px]">{story.plot || '（プロットなし）'}</div>
                 <div className="mt-0.5 flex items-center gap-2 text-[12px] text-[var(--text-faint)]">
                   <span>{new Date(story.created_at).toLocaleString('ja-JP')}</span>
+                  {workspaceName(story.workspace_id) && (
+                    <span className="rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
+                      {workspaceName(story.workspace_id)}
+                    </span>
+                  )}
                   {story.target_tone && (
                     <span className="rounded-full bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[10px]">
                       {TONE_LABELS[story.target_tone] ?? story.target_tone}
