@@ -9,11 +9,13 @@ import { PromptManager } from './PromptManager'
 export function SettingsPanel({
   onClose,
   libraryRoot,
-  onOpenLibraryPicker
+  onOpenLibraryPicker,
+  onOpenSetup
 }: {
   onClose: () => void
   libraryRoot: string | null
   onOpenLibraryPicker: () => void
+  onOpenSetup: () => void
 }) {
   const { settings, updateSettings } = useUiSettings()
 
@@ -31,6 +33,21 @@ export function SettingsPanel({
       </div>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
+        <section>
+          <h3 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">セットアップ</h3>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="text-[12px] leading-relaxed text-[var(--text-faint)]">
+              llama-server の導入・更新、埋め込みサーバの起動/停止など、サーバ関連の設定。
+            </div>
+            <button
+              onClick={onOpenSetup}
+              className="mt-2 rounded border border-[var(--border-strong)] px-3 py-1.5 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)]"
+            >
+              セットアップを開く…
+            </button>
+          </div>
+        </section>
+
         <section>
           <h3 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">ライブラリ</h3>
           <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">

@@ -5,9 +5,10 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
   type Edge,
   type Node,
-  type NodeChange,
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -158,22 +159,9 @@ function GenerateInner() {
   const [sceneViews, setSceneViews] = useState<SceneView[]>([])
   const [status, setStatus] = useState<RunStatus>('idle')
   const [error, setError] = useState<string | null>(null)
-  const [positionOverrides, setPositionOverrides] = useState<Record<string, { x: number; y: number }>>({})
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const autoStarted = useRef(false)
-
-  // ドラッグでの移動を受け付ける（ノードは毎レンダー再構築するため、位置だけ上書きで保持）
-  const handleNodesChange = useCallback((changes: NodeChange[]) => {
-    setPositionOverrides((prev) => {
-      let next = prev
-      for (const change of changes) {
-        if (change.type === 'position' && change.position) {
-          next = next === prev ? { ...prev } : next
-          next[change.id] = change.position
-        }
-      }
-      return next
-    })
-  }, [])
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
   const isRunning = status === 'starting-model' || status === 'generating'
@@ -350,35 +338,50 @@ function GenerateInner() {
     }
   }
 
-  // ノード配置: ドラッグでの移動 > Compose のカード位置 > 横一列 の優先順
-  const { nodes, edges } = useMemo(() => {
-    const nodes: Node[] = sceneViews.map((scene, index) => {
-      const composeNode = composeNodes.find((item) => item.id === scene.cardId)
-      const position =
-        positionOverrides[`scene-${index}`] ??
-        (composeNode ? { ...composeNode.position } : { x: 60 + index * 340, y: 160 })
-      return {
-        id: `scene-${index}`,
-        type: 'scene',
-        position,
-        data: {
-          index,
-          scene,
-          card: cardById.get(scene.cardId),
-          isRunning,
-          hasTake: currentTakeId !== null,
-          onRegenerate: handleRegenerate
-        } satisfies SceneNodeData as unknown as Record<string, unknown>
-      }
+  // シーンの内容（ストリーミング）を既存ノードへ流し込む。position と React Flow が
+  // 付与した measured（測定済みサイズ）は既存ノードから引き継ぐ。ノードを毎回作り直すと
+  // measured が失われ、ドラッグ中に「未測定 → 一瞬透明」のちらつきが出るため。
+  // 配置優先順: 既存（ドラッグ後）> Compose のカード位置 > 横一列
+  useEffect(() => {
+    setNodes((prev) => {
+      const prevById = new Map(prev.map((node) => [node.id, node]))
+      return sceneViews.map((scene, index) => {
+        const id = `scene-${index}`
+        const existing = prevById.get(id)
+        const composeNode = composeNodes.find((item) => item.id === scene.cardId)
+        const position =
+          existing?.position ?? (composeNode ? { ...composeNode.position } : { x: 60 + index * 340, y: 160 })
+        return {
+          ...existing,
+          id,
+          type: 'scene',
+          position,
+          data: {
+            index,
+            scene,
+            card: cardById.get(scene.cardId),
+            isRunning,
+            hasTake: currentTakeId !== null,
+            onRegenerate: handleRegenerate
+          } satisfies SceneNodeData as unknown as Record<string, unknown>
+        }
+      })
     })
-    const edges: Edge[] = sceneViews.slice(1).map((_, index) => ({
-      id: `edge-${index}`,
-      source: `scene-${index}`,
-      target: `scene-${index + 1}`,
-      type: 'smoothstep'
-    }))
-    return { nodes, edges }
-  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, positionOverrides])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, cardById])
+
+  // エッジは一本鎖。シーン数が変わったときだけ組み直す
+  useEffect(() => {
+    setEdges(
+      sceneViews.slice(1).map((_, index) => ({
+        id: `edge-${index}`,
+        source: `scene-${index}`,
+        target: `scene-${index + 1}`,
+        type: 'smoothstep'
+      }))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneViews.length])
 
   return (
     <div className="flex h-full">
@@ -473,7 +476,8 @@ function GenerateInner() {
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          onNodesChange={handleNodesChange}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           nodesConnectable={false}
           minZoom={0.2}
           maxZoom={1.5}

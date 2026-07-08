@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { AppSettings, BackendStatus, EmbeddingStatus, LlamaServerStatus } from '../electron/main/types'
-import { IconFolder, IconPlay, IconSettings, IconX } from './components/icons'
+import { IconFolder, IconSettings } from './components/icons'
 import { LibraryPicker } from './components/LibraryPicker'
+import { ModelBar } from './components/ModelBar'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SetupPanel } from './components/SetupPanel'
 import { StatusBar } from './components/StatusBar'
@@ -53,19 +54,6 @@ function AppShell() {
     setModelError(null)
     try {
       const { settings: next } = await window.storyFlow.selectModel(modelPath)
-      setSettings(next)
-    } catch (cause) {
-      setModelError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setModelBusy(false)
-    }
-  }
-
-  const handleLoadModel = async () => {
-    setModelBusy(true)
-    setModelError(null)
-    try {
-      const { settings: next } = await window.storyFlow.ensureLlama()
       setSettings(next)
     } catch (cause) {
       setModelError(cause instanceof Error ? cause.message : String(cause))
@@ -175,24 +163,40 @@ function AppShell() {
         />
       )}
 
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-[var(--border)] bg-[var(--bg-sidebar)] px-4">
-        <span className="text-[15px] font-semibold tracking-wide">Story Flow</span>
+      <header className="relative flex h-12 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-sidebar)] px-4">
+        <div className="flex items-center gap-4">
+          <span className="text-[15px] font-semibold tracking-wide">Story Flow</span>
 
-        <nav className="flex items-center gap-1">
-          {PHASES.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setPhase(id)}
-              className={`rounded px-3 py-1.5 text-[13px] ${
-                phase === id
-                  ? 'bg-[var(--accent-soft)] text-[var(--text)] outline outline-1 outline-[var(--accent-border)]'
-                  : 'text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+          <nav className="flex items-center gap-1">
+            {PHASES.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setPhase(id)}
+                className={`rounded px-3 py-1.5 text-[13px] ${
+                  phase === id
+                    ? 'bg-[var(--accent-soft)] text-[var(--text)] outline outline-1 outline-[var(--accent-border)]'
+                    : 'text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* モデル選択バー（中央）: 押すと一覧モーダル → 選ぶとロード。右にイジェクト */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="pointer-events-auto">
+            <ModelBar
+              settings={settings}
+              busy={modelBusy}
+              error={modelError}
+              onSelect={handleSelectModel}
+              onEject={handleEjectModel}
+              onRescan={handleRescanModels}
+            />
+          </div>
+        </div>
 
         <div className="ml-auto flex items-center gap-3">
           <button
@@ -202,73 +206,6 @@ function AppShell() {
           >
             <IconFolder size={13} />
             <span className="truncate">{libraryName ?? 'ライブラリを開く'}</span>
-          </button>
-          <span className="flex items-center gap-1.5 text-[12px] text-[var(--text-dim)]">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${backendHealthy ? 'bg-[var(--ok)]' : 'bg-[var(--danger)]'}`}
-            />
-            backend
-          </span>
-          {/* モデル選択バー: models/ の GGUF から選択（選択でロード） */}
-          <div className="flex items-center gap-1.5" title={modelError ?? modelLabel}>
-            <span
-              className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                modelBusy
-                  ? 'animate-pulse bg-[var(--accent)]'
-                  : settings?.isModelLoaded
-                    ? 'bg-[var(--ok)]'
-                    : settings?.isServerInstalled
-                      ? 'bg-[var(--text-faint)]'
-                      : 'bg-[var(--danger)]'
-              }`}
-            />
-            <select
-              value={settings?.selectedModelPath ?? ''}
-              onChange={(event) => void handleSelectModel(event.target.value)}
-              onFocus={() => void handleRescanModels()}
-              disabled={modelBusy || !settings?.isServerInstalled || (settings?.availableModels.length ?? 0) === 0}
-              className="max-w-[260px] rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-[12px] disabled:opacity-60"
-            >
-              {(settings?.availableModels.length ?? 0) === 0 && <option value="">モデルなし（models/ に GGUF を配置）</option>}
-              {settings?.availableModels.map((model) => (
-                <option key={model.path} value={model.path}>
-                  {model.name}
-                  {model.metadata.quantizationLabel ? `（${model.metadata.quantizationLabel}）` : ''}
-                </option>
-              ))}
-            </select>
-            {modelBusy ? (
-              <span className="text-[11px] text-[var(--accent)]">ロード中…</span>
-            ) : settings?.isModelLoaded ? (
-              <button
-                onClick={() => void handleEjectModel()}
-                aria-label="モデルを停止"
-                title="モデルを停止（VRAM を解放）"
-                className="flex items-center rounded border border-[var(--border-strong)] px-1.5 py-1.5 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)]"
-              >
-                <IconX size={11} />
-              </button>
-            ) : (
-              <button
-                onClick={() => void handleLoadModel()}
-                disabled={!settings?.isServerInstalled || !settings?.selectedModelPath}
-                aria-label="モデルをロード"
-                title="選択中のモデルをロード"
-                className="flex items-center rounded border border-[var(--border-strong)] px-1.5 py-1.5 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-40"
-              >
-                <IconPlay size={11} />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => setRightPanel((panel) => (panel === 'setup' ? null : 'setup'))}
-            className={`rounded border px-3 py-1.5 text-[13px] ${
-              rightPanel === 'setup'
-                ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
-                : 'border-[var(--border-strong)] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-            }`}
-          >
-            セットアップ
           </button>
           <button
             onClick={() => setRightPanel((panel) => (panel === 'settings' ? null : 'settings'))}
@@ -309,6 +246,7 @@ function AppShell() {
             onClose={() => setRightPanel(null)}
             libraryRoot={libraryRoot}
             onOpenLibraryPicker={() => setIsLibraryPickerOpen(true)}
+            onOpenSetup={() => setRightPanel('setup')}
           />
         )}
       </div>
