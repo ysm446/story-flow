@@ -72,3 +72,36 @@ textarea {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Theater: Ken Burns（シーンごとに方向を変える 4 パターン） */
+@keyframes kenburns-0 {
+  from { transform: scale(1.05) translate(0, 0); }
+  to { transform: scale(1.18) translate(-2.5%, -1.5%); }
+}
+@keyframes kenburns-1 {
+  from { transform: scale(1.18) translate(2%, 1.5%); }
+  to { transform: scale(1.05) translate(0, 0); }
+}
+@keyframes kenburns-2 {
+  from { transform: scale(1.05) translate(-2%, 1%); }
+  to { transform: scale(1.2) translate(1.5%, -1%); }
+}
+@keyframes kenburns-3 {
+  from { transform: scale(1.2) translate(0, -2%); }
+  to { transform: scale(1.06) translate(-1%, 1.5%); }
+}
+.kenburns-0 { animation: kenburns-0 30s ease-out forwards; }
+.kenburns-1 { animation: kenburns-1 30s ease-out forwards; }
+.kenburns-2 { animation: kenburns-2 30s ease-out forwards; }
+.kenburns-3 { animation: kenburns-3 30s ease-out forwards; }
+
+/* Theater: シーンレイヤーのクロスフェード */
+.theater-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+.theater-layer.is-active {
+  opacity: 1;
+}

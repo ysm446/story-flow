@@ -84,6 +84,21 @@ export interface StorySummary {
   created_at: string
 }
 
+export interface StoryScene {
+  id: string
+  story_id: string
+  position: number
+  card_id: string
+  prose: string
+  is_fixed: number
+  selection_reason: string | null
+  state_after: string | null
+}
+
+export interface StoryDetail extends StorySummary {
+  scenes: StoryScene[]
+}
+
 export interface PromptInfo {
   name: string
   default: string
@@ -169,5 +184,11 @@ export const api = {
   setPrompt: (name: 'writer' | 'selector', override: string | null) =>
     request<PromptInfo>(`/prompts/${name}`, { method: 'PUT', body: JSON.stringify({ override }) }),
 
-  listStories: () => request<{ stories: StorySummary[] }>('/stories')
+  listStories: () => request<{ stories: StorySummary[] }>('/stories'),
+
+  getStory: (storyId: string) => request<StoryDetail>(`/stories/${storyId}`),
+
+  deleteStory: (storyId: string) => request<{ ok: boolean }>(`/stories/${storyId}`, { method: 'DELETE' }),
+
+  getCard: (cardId: string) => request<Card>(`/cards/${cardId}`)
 }
