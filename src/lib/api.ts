@@ -99,12 +99,22 @@ export interface StoryDetail extends StorySummary {
   scenes: StoryScene[]
 }
 
-export interface PromptInfo {
+export interface PromptPreset {
+  id: string
+  name: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PromptConfig {
   name: string
   default: string
-  override: string | null
-  effective: string
+  active_id: string | null
+  presets: PromptPreset[]
 }
+
+export type PromptKind = 'writer' | 'selector'
 
 export interface StoryStateSnapshot {
   characters: Array<{ name: string; traits: string }>
@@ -179,10 +189,28 @@ export const api = {
 
   vaultStats: () => request<VaultStats>('/vault/stats'),
 
-  getPrompt: (name: 'writer' | 'selector') => request<PromptInfo>(`/prompts/${name}`),
+  getPromptConfig: (kind: PromptKind) => request<PromptConfig>(`/prompts/${kind}`),
 
-  setPrompt: (name: 'writer' | 'selector', override: string | null) =>
-    request<PromptInfo>(`/prompts/${name}`, { method: 'PUT', body: JSON.stringify({ override }) }),
+  createPromptPreset: (kind: PromptKind, name: string, content?: string) =>
+    request<PromptPreset>(`/prompts/${kind}/presets`, {
+      method: 'POST',
+      body: JSON.stringify({ name, content: content ?? null })
+    }),
+
+  updatePromptPreset: (kind: PromptKind, presetId: string, patch: { name?: string; content?: string }) =>
+    request<PromptPreset>(`/prompts/${kind}/presets/${presetId}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch)
+    }),
+
+  deletePromptPreset: (kind: PromptKind, presetId: string) =>
+    request<{ ok: boolean }>(`/prompts/${kind}/presets/${presetId}`, { method: 'DELETE' }),
+
+  setActivePrompt: (kind: PromptKind, presetId: string | null) =>
+    request<PromptConfig>(`/prompts/${kind}/active`, {
+      method: 'PUT',
+      body: JSON.stringify({ preset_id: presetId })
+    }),
 
   listStories: () => request<{ stories: StorySummary[] }>('/stories'),
 

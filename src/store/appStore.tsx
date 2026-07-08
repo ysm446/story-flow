@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { Edge, Node } from '@xyflow/react'
+import type { CardTone } from '../lib/api'
 
 export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 
@@ -11,6 +12,7 @@ export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 export interface CompositionDraft {
   anchorCardIds: string[]
   plot: string
+  targetTone: CardTone | ''
 }
 
 interface AppStore {
@@ -22,15 +24,23 @@ interface AppStore {
   composeNodes: Node[]
   composeEdges: Edge[]
   setComposeGraph: (nodes: Node[], edges: Edge[]) => void
+  /** Compose の「生成する」からの遷移フラグ。Generate 側がマウント時に消費して自動開始する */
+  pendingGenerate: boolean
+  setPendingGenerate: (pending: boolean) => void
 }
 
 const AppStoreContext = createContext<AppStore | null>(null)
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<PhaseId>('vault')
-  const [composition, setComposition] = useState<CompositionDraft>({ anchorCardIds: [], plot: '' })
+  const [composition, setComposition] = useState<CompositionDraft>({
+    anchorCardIds: [],
+    plot: '',
+    targetTone: ''
+  })
   const [composeNodes, setComposeNodes] = useState<Node[]>([])
   const [composeEdges, setComposeEdges] = useState<Edge[]>([])
+  const [pendingGenerate, setPendingGenerate] = useState(false)
 
   const value = useMemo(
     () => ({
@@ -43,9 +53,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setComposeGraph: (nodes: Node[], edges: Edge[]) => {
         setComposeNodes(nodes)
         setComposeEdges(edges)
-      }
+      },
+      pendingGenerate,
+      setPendingGenerate
     }),
-    [phase, composition, composeNodes, composeEdges]
+    [phase, composition, composeNodes, composeEdges, pendingGenerate]
   )
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>

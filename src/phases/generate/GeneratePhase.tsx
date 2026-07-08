@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { api, type Card, type CardTone, type GenerateEvent } from '../../lib/api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { api, type Card, type GenerateEvent } from '../../lib/api'
 import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
-import { PromptEditor } from './PromptEditor'
 
 const ROLE_LABELS: Record<string, string> = {
   intro: '導入',
@@ -12,50 +11,38 @@ const ROLE_LABELS: Record<string, string> = {
   ending: '結末'
 }
 
-const TONE_OPTIONS: Array<{ value: CardTone | ''; label: string }> = [
-  { value: '', label: '指定なし' },
-  { value: 'happy', label: 'ハッピー' },
-  { value: 'bad', label: 'バッド' },
-  { value: 'bitter', label: 'ビター' },
-  { value: 'neutral', label: 'ニュートラル' }
-]
+const TONE_LABELS: Record<string, string> = {
+  happy: 'ハッピー',
+  bad: 'バッド',
+  bitter: 'ビター',
+  neutral: 'ニュートラル'
+}
 
 type SceneEvent = Extract<GenerateEvent, { type: 'scene' }>
 
 type RunStatus = 'idle' | 'starting-model' | 'generating' | 'done' | 'error'
 
 /**
- * Generate: アンカー列（v1 は Compose 未実装のためここで直接選ぶ）を逐次清書する。
- * SSE でシーンが 1 枚ずつ埋まっていく進行を表示する。
+ * Generate: 実行と進行表示。
+ * 構成（アンカー・プロット・トーン・プロンプト）は Compose で決める。
+ * Compose の「生成する」から遷移した場合は自動で生成を開始する。
  */
 export function GeneratePhase() {
-  const { composition, setComposition } = useAppStore()
+  const { composition, setPhase, pendingGenerate, setPendingGenerate } = useAppStore()
   const [allCards, setAllCards] = useState<Card[]>([])
-  const [addCardId, setAddCardId] = useState('')
-  const [targetTone, setTargetTone] = useState<CardTone | ''>('')
   const [status, setStatus] = useState<RunStatus>('idle')
   const [scenes, setScenes] = useState<SceneEvent[]>([])
   const [storyId, setStoryId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const autoStarted = useRef(false)
 
   useEffect(() => {
     void api.listCards().then((result) => setAllCards(result.cards)).catch(() => setAllCards([]))
   }, [])
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
-  const anchors = composition.anchorCardIds.map((id) => cardById.get(id)).filter(Boolean) as Card[]
-  const remaining = allCards.filter((card) => !composition.anchorCardIds.includes(card.id))
+  const anchors = composition.anchorCardIds
   const isRunning = status === 'starting-model' || status === 'generating'
-
-  const setAnchors = (anchorCardIds: string[]) => setComposition({ ...composition, anchorCardIds })
-
-  const moveAnchor = (index: number, delta: number) => {
-    const next = [...composition.anchorCardIds]
-    const target = index + delta
-    if (target < 0 || target >= next.length) return
-    ;[next[index], next[target]] = [next[target], next[index]]
-    setAnchors(next)
-  }
 
   const handleGenerate = async () => {
     if (anchors.length === 0 || isRunning) return
@@ -77,9 +64,9 @@ export function GeneratePhase() {
       await postSse<GenerateEvent>(
         '/generate',
         {
-          card_ids: composition.anchorCardIds,
+          card_ids: anchors,
           plot: composition.plot,
-          target_tone: targetTone || null,
+          target_tone: composition.targetTone || null,
           writer_base_url: settings.llamaBaseUrl
         },
         (event) => {
@@ -101,141 +88,90 @@ export function GeneratePhase() {
     }
   }
 
-  const inputClass =
-    'rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-[13px] focus:outline focus:outline-1 focus:outline-[var(--accent-border)]'
+  // Compose の「生成する」からの遷移なら自動開始
+  useEffect(() => {
+    if (pendingGenerate && !autoStarted.current) {
+      autoStarted.current = true
+      setPendingGenerate(false)
+      void handleGenerate()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGenerate])
 
   return (
     <div className="mx-auto flex h-full max-w-6xl gap-6 px-6 py-6">
-      {/* 左: 構成入力 */}
-      <div className="w-[380px] shrink-0 space-y-5 overflow-y-auto pr-1">
+      {/* 左: 実行サマリ */}
+      <div className="w-[320px] shrink-0 space-y-5 overflow-y-auto pr-1">
         <div>
           <h1 className="text-[18px] font-semibold">Generate — 生成</h1>
           <p className="mt-1 text-[12px] text-[var(--text-dim)]">
-            アンカー列を左から 1 シーンずつ清書し、確定事実を持ち越します。
+            構成の編集は Compose フェーズで行います。ここでは実行と進行を確認します。
           </p>
         </div>
 
-        {/* アンカー列 */}
         <section>
-          <h2 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">アンカー列（上から順に清書）</h2>
-          {anchors.length === 0 && (
+          <h2 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">アンカー列</h2>
+          {anchors.length === 0 ? (
             <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[12px] text-[var(--text-faint)]">
-              下のセレクトからカードを追加してください。
+              構成がありません。
+              <button onClick={() => setPhase('compose')} className="ml-1 text-[var(--accent)] hover:underline">
+                Compose で組む →
+              </button>
             </div>
+          ) : (
+            <ol className="space-y-1.5">
+              {anchors.map((cardId, index) => {
+                const card = cardById.get(cardId)
+                return (
+                  <li
+                    key={cardId}
+                    className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2.5 py-1.5"
+                  >
+                    <span className="w-5 shrink-0 text-center text-[12px] text-[var(--text-faint)]">{index + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px]">{card?.title ?? cardId}</span>
+                    {card && (
+                      <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
+                        {ROLE_LABELS[card.role]}
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
+            </ol>
           )}
-          <ul className="space-y-1.5">
-            {anchors.map((card, index) => (
-              <li
-                key={card.id}
-                className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2.5 py-1.5"
-              >
-                <span className="w-5 shrink-0 text-center text-[12px] text-[var(--text-faint)]">{index + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-[13px]">{card.title}</span>
-                <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
-                  {ROLE_LABELS[card.role]}
-                </span>
-                <div className="flex shrink-0 gap-0.5">
-                  <button
-                    onClick={() => moveAnchor(index, -1)}
-                    disabled={isRunning || index === 0}
-                    aria-label="上へ"
-                    className="rounded px-1 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-30"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    onClick={() => moveAnchor(index, 1)}
-                    disabled={isRunning || index === anchors.length - 1}
-                    aria-label="下へ"
-                    className="rounded px-1 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-30"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    onClick={() => setAnchors(composition.anchorCardIds.filter((id) => id !== card.id))}
-                    disabled={isRunning}
-                    aria-label="外す"
-                    className="rounded px-1 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-30"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-2 flex gap-2">
-            <select
-              value={addCardId}
-              onChange={(event) => setAddCardId(event.target.value)}
-              disabled={isRunning}
-              className={`${inputClass} min-w-0 flex-1`}
-            >
-              <option value="">カードを選択…</option>
-              {remaining.map((card) => (
-                <option key={card.id} value={card.id}>
-                  [{ROLE_LABELS[card.role]}] {card.title}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => {
-                if (!addCardId) return
-                setAnchors([...composition.anchorCardIds, addCardId])
-                setAddCardId('')
-              }}
-              disabled={isRunning || !addCardId}
-              className="shrink-0 rounded border border-[var(--border-strong)] px-3 py-1.5 text-[13px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
-            >
-              追加
-            </button>
-          </div>
         </section>
 
-        {/* プロット・トーン */}
-        <label className="block">
-          <span className="mb-1 block text-[12px] text-[var(--text-dim)]">プロット（物語全体の方向づけ。任意）</span>
-          <textarea
-            value={composition.plot}
-            onChange={(event) => setComposition({ ...composition, plot: event.target.value })}
-            disabled={isRunning}
-            rows={3}
-            className={`${inputClass} w-full leading-relaxed`}
-          />
-        </label>
+        {composition.plot.trim() && (
+          <section>
+            <h2 className="mb-1 text-[13px] font-semibold text-[var(--text-dim)]">プロット</h2>
+            <p className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[12px] leading-relaxed text-[var(--text-dim)]">
+              {composition.plot}
+            </p>
+          </section>
+        )}
 
-        <label className="block">
-          <span className="mb-1 block text-[12px] text-[var(--text-dim)]">目標トーン（結末の着地。任意）</span>
-          <select
-            value={targetTone}
-            onChange={(event) => setTargetTone(event.target.value as CardTone | '')}
-            disabled={isRunning}
-            className={`${inputClass} w-full`}
-          >
-            {TONE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {composition.targetTone && (
+          <div className="text-[12px] text-[var(--text-dim)]">
+            目標トーン:{' '}
+            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
+              {TONE_LABELS[composition.targetTone]}
+            </span>
+          </div>
+        )}
 
         <button
           onClick={() => void handleGenerate()}
           disabled={isRunning || anchors.length === 0}
           className="w-full rounded bg-[var(--accent)] px-4 py-2.5 text-[14px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {status === 'starting-model' ? 'モデル起動中…' : status === 'generating' ? '生成中…' : '生成する'}
+          {status === 'starting-model'
+            ? 'モデル起動中…'
+            : status === 'generating'
+              ? '生成中…'
+              : status === 'done'
+                ? 'もう一度生成する（別の読み味に）'
+                : '生成する'}
         </button>
-
-        {/* system prompt 編集 */}
-        <details className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
-          <summary className="cursor-pointer text-[13px] text-[var(--text-dim)]">
-            清書プロンプトを編集（上級者向け）
-          </summary>
-          <div className="mt-3">
-            <PromptEditor name="writer" />
-          </div>
-        </details>
       </div>
 
       {/* 右: 進行表示 */}
@@ -249,19 +185,25 @@ export function GeneratePhase() {
         )}
 
         {storyId && (
-          <div className="mt-3 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 text-[13px]">
-            物語を保存しました（story: <span className="font-mono text-[12px]">{storyId.slice(0, 8)}…</span>）。
-            Theater フェーズで再生できます（フェーズ 3 実装後）。
+          <div className="mt-3 flex items-center gap-3 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 text-[13px]">
+            <span>物語を保存しました。</span>
+            <button
+              onClick={() => setPhase('theater')}
+              className="rounded bg-[var(--accent)] px-3 py-1 text-[12px] font-medium text-white hover:bg-[var(--accent-hover)]"
+            >
+              Theater で再生 →
+            </button>
           </div>
         )}
 
         <div className="mt-3 space-y-3">
-          {anchors.map((card, index) => {
+          {anchors.map((cardId, index) => {
+            const card = cardById.get(cardId)
             const scene = scenes.find((item) => item.position === index)
             const isNext = !scene && scenes.length === index && isRunning
             return (
               <div
-                key={card.id}
+                key={cardId}
                 className={`rounded-md border px-4 py-3 ${
                   scene
                     ? 'border-[var(--border)] bg-[var(--bg-card)]'
@@ -272,7 +214,7 @@ export function GeneratePhase() {
               >
                 <div className="flex items-center gap-2 text-[12px] text-[var(--text-dim)]">
                   <span className="font-semibold">シーン {index + 1}</span>
-                  <span className="truncate">{card.title}</span>
+                  <span className="truncate">{card?.title ?? ''}</span>
                   {isNext && <span className="text-[var(--accent)]">清書中…</span>}
                 </div>
                 {scene && (
@@ -293,7 +235,7 @@ export function GeneratePhase() {
           })}
           {anchors.length === 0 && (
             <div className="mt-10 text-center text-[13px] text-[var(--text-faint)]">
-              アンカー列を組んで「生成する」を押すと、ここにシーンが 1 枚ずつ埋まっていきます。
+              Compose で構成を組んで「生成する」を押すと、ここにシーンが 1 枚ずつ埋まっていきます。
             </div>
           )}
         </div>

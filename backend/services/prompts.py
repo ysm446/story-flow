@@ -1,51 +1,162 @@
-"""生成用 system prompt の管理。
+"""生成用 system prompt のプリセット管理。
 
-backend/prompts/*.md は「既定値」。ユーザーが UI から編集した上書き値は
-data/prompts/*.md に保存し、存在すればそちらを優先する（既定に戻す = 上書きを削除）。
-出力形式（JSON スキーマ）の指示は編集対象から分離し、writer.py 側で必ず付与する。
+物語の種類に合わせてプロンプトを切り替えられるよう、名前付きプリセットを
+複数管理する（追加・編集・削除・アクティブ切替）。
+
+- 既定プロンプト: backend/prompts/{kind}.md（読み取り専用。削除・編集不可）
+- ユーザープリセット: data/prompts/presets.json に保存
+- アクティブが未設定（None）なら既定を使う
+- 出力形式（JSON スキーマ）の指示は編集対象から分離し、writer.py 側で必ず付与する
 """
 
 from __future__ import annotations
 
+import json
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DIR = Path(__file__).resolve().parents[1] / "prompts"
 _OVERRIDE_DIR = _REPO_ROOT / "data" / "prompts"
+_STORE_PATH = _OVERRIDE_DIR / "presets.json"
 
-PROMPT_NAMES = ("writer", "selector")
-
-
-def _validate(name: str) -> None:
-    if name not in PROMPT_NAMES:
-        raise KeyError(f"unknown prompt: {name}")
+PROMPT_KINDS = ("writer", "selector")
 
 
-def get_prompt(name: str) -> dict:
-    """{name, default, override, effective} を返す。"""
-    _validate(name)
-    default = (_DEFAULT_DIR / f"{name}.md").read_text(encoding="utf-8")
-    override_path = _OVERRIDE_DIR / f"{name}.md"
-    override = override_path.read_text(encoding="utf-8") if override_path.exists() else None
+class PresetNotFound(KeyError):
+    pass
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _validate_kind(kind: str) -> None:
+    if kind not in PROMPT_KINDS:
+        raise KeyError(f"unknown prompt kind: {kind}")
+
+
+def _default_content(kind: str) -> str:
+    return (_DEFAULT_DIR / f"{kind}.md").read_text(encoding="utf-8")
+
+
+def _empty_store() -> dict:
+    return {kind: {"active_id": None, "presets": []} for kind in PROMPT_KINDS}
+
+
+def _load_store() -> dict:
+    store = _empty_store()
+    if _STORE_PATH.exists():
+        try:
+            loaded = json.loads(_STORE_PATH.read_text(encoding="utf-8"))
+            for kind in PROMPT_KINDS:
+                if isinstance(loaded.get(kind), dict):
+                    store[kind]["active_id"] = loaded[kind].get("active_id")
+                    store[kind]["presets"] = list(loaded[kind].get("presets") or [])
+        except (json.JSONDecodeError, OSError):
+            pass  # 壊れていたら空から（既定プロンプトは常に使える）
+    _migrate_legacy_override(store)
+    return store
+
+
+def _save_store(store: dict) -> None:
+    _OVERRIDE_DIR.mkdir(parents=True, exist_ok=True)
+    _STORE_PATH.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+
+
+def _migrate_legacy_override(store: dict) -> None:
+    """旧仕様（単一上書き data/prompts/{kind}.md）をプリセットとして取り込む。"""
+    for kind in PROMPT_KINDS:
+        legacy = _OVERRIDE_DIR / f"{kind}.md"
+        if not legacy.exists():
+            continue
+        content = legacy.read_text(encoding="utf-8")
+        preset = {
+            "id": str(uuid.uuid4()),
+            "name": "カスタム（旧上書き）",
+            "content": content,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        store[kind]["presets"].append(preset)
+        store[kind]["active_id"] = preset["id"]
+        legacy.rename(legacy.with_suffix(".md.migrated"))
+        _save_store(store)
+
+
+def get_prompt_config(kind: str) -> dict:
+    """{name, default, active_id, presets} を返す。"""
+    _validate_kind(kind)
+    store = _load_store()
     return {
-        "name": name,
-        "default": default,
-        "override": override,
-        "effective": override if override is not None else default,
+        "name": kind,
+        "default": _default_content(kind),
+        "active_id": store[kind]["active_id"],
+        "presets": store[kind]["presets"],
     }
 
 
-def set_override(name: str, content: str | None) -> dict:
-    """上書きを保存する。None なら削除して既定に戻す。"""
-    _validate(name)
-    override_path = _OVERRIDE_DIR / f"{name}.md"
-    if content is None or not content.strip():
-        override_path.unlink(missing_ok=True)
-    else:
-        _OVERRIDE_DIR.mkdir(parents=True, exist_ok=True)
-        override_path.write_text(content, encoding="utf-8", newline="\n")
-    return get_prompt(name)
+def create_preset(kind: str, name: str, content: str | None = None) -> dict:
+    _validate_kind(kind)
+    store = _load_store()
+    preset = {
+        "id": str(uuid.uuid4()),
+        "name": name.strip() or "新しいプロンプト",
+        "content": content if content is not None else _default_content(kind),
+        "created_at": _now(),
+        "updated_at": _now(),
+    }
+    store[kind]["presets"].append(preset)
+    _save_store(store)
+    return preset
 
 
-def effective_prompt(name: str) -> str:
-    return get_prompt(name)["effective"]
+def update_preset(kind: str, preset_id: str, name: str | None = None, content: str | None = None) -> dict:
+    _validate_kind(kind)
+    store = _load_store()
+    for preset in store[kind]["presets"]:
+        if preset["id"] == preset_id:
+            if name is not None and name.strip():
+                preset["name"] = name.strip()
+            if content is not None:
+                preset["content"] = content
+            preset["updated_at"] = _now()
+            _save_store(store)
+            return preset
+    raise PresetNotFound(preset_id)
+
+
+def delete_preset(kind: str, preset_id: str) -> None:
+    _validate_kind(kind)
+    store = _load_store()
+    presets = store[kind]["presets"]
+    if not any(preset["id"] == preset_id for preset in presets):
+        raise PresetNotFound(preset_id)
+    store[kind]["presets"] = [preset for preset in presets if preset["id"] != preset_id]
+    if store[kind]["active_id"] == preset_id:
+        store[kind]["active_id"] = None  # 既定に戻す
+    _save_store(store)
+
+
+def set_active(kind: str, preset_id: str | None) -> dict:
+    """アクティブなプリセットを切り替える。None = 既定。"""
+    _validate_kind(kind)
+    store = _load_store()
+    if preset_id is not None and not any(p["id"] == preset_id for p in store[kind]["presets"]):
+        raise PresetNotFound(preset_id)
+    store[kind]["active_id"] = preset_id
+    _save_store(store)
+    return get_prompt_config(kind)
+
+
+def effective_prompt(kind: str) -> str:
+    """生成に使う system prompt（アクティブなプリセット or 既定）。"""
+    _validate_kind(kind)
+    store = _load_store()
+    active_id = store[kind]["active_id"]
+    if active_id:
+        for preset in store[kind]["presets"]:
+            if preset["id"] == active_id:
+                return preset["content"]
+    return _default_content(kind)

@@ -1,13 +1,15 @@
 import { useUiSettings } from '../store/settings'
+import { PromptManager } from './PromptManager'
 
 /**
- * アプリ設定パネル。表示・演出の環境設定を置く（サーバ関連はセットアップパネル）。
+ * アプリ設定パネル。表示・演出の環境設定とプロンプト管理を置く
+ * （サーバ関連はセットアップパネル）。
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const { settings, updateSettings } = useUiSettings()
 
   return (
-    <aside className="flex h-full w-[340px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-sidebar)]">
+    <aside className="flex h-full w-[420px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-sidebar)]">
       <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
         <h2 className="text-[15px] font-semibold">設定</h2>
         <button
@@ -36,6 +38,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               </span>
             </span>
           </label>
+        </section>
+
+        <section>
+          <PromptManager kind="writer" title="清書プロンプト（物語の種類に合わせて切替）" />
         </section>
       </div>
     </aside>

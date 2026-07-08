@@ -15,7 +15,7 @@ import {
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { api, cardFileUrl, type Card, type CardRole } from '../../lib/api'
+import { api, cardFileUrl, type Card, type CardRole, type CardTone, type PromptConfig } from '../../lib/api'
 import { useAppStore } from '../../store/appStore'
 
 const ROLE_LABELS: Record<CardRole, string> = {
@@ -25,6 +25,14 @@ const ROLE_LABELS: Record<CardRole, string> = {
   climax: 'クライマックス',
   ending: '結末'
 }
+
+const TONE_OPTIONS: Array<{ value: CardTone | ''; label: string }> = [
+  { value: '', label: '指定なし' },
+  { value: 'happy', label: 'ハッピー' },
+  { value: 'bad', label: 'バッド' },
+  { value: 'bitter', label: 'ビター' },
+  { value: 'neutral', label: 'ニュートラル' }
+]
 
 /**
  * Compose: 始点・中間・終点アンカーをノードで置き、線で繋いで並び順を決める。
@@ -93,14 +101,16 @@ function computeChain(nodes: Node[], edges: Edge[]): { orderedIds: string[] | nu
 }
 
 function ComposeInner() {
-  const { composition, setComposition, setPhase, composeNodes, composeEdges, setComposeGraph } = useAppStore()
+  const { composition, setComposition, setPhase, composeNodes, composeEdges, setComposeGraph, setPendingGenerate } =
+    useAppStore()
   const [allCards, setAllCards] = useState<Card[]>([])
   const [nodes, setNodes, onNodesChange] = useNodesState(composeNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(composeEdges)
-  const [sent, setSent] = useState(false)
+  const [promptConfig, setPromptConfig] = useState<PromptConfig | null>(null)
 
   useEffect(() => {
     void api.listCards().then((result) => setAllCards(result.cards)).catch(() => setAllCards([]))
+    void api.getPromptConfig('writer').then(setPromptConfig).catch(() => setPromptConfig(null))
   }, [])
 
   // タブ切替で消えないよう store へ同期
@@ -116,7 +126,6 @@ function ComposeInner() {
   const addCardNode = (card: Card) => {
     const position = { x: 80 + (nodes.length % 4) * 230, y: 120 + Math.floor(nodes.length / 4) * 190 }
     setNodes((prev) => [...prev, { id: card.id, type: 'anchor', position, data: { card } }])
-    setSent(false)
   }
 
   // 一本鎖の制約: 出力・入力とも 1 本まで、循環は禁止
@@ -134,17 +143,20 @@ function ComposeInner() {
         }
         return addEdge({ ...connection, type: 'smoothstep' }, prev)
       })
-      setSent(false)
     },
     [setEdges]
   )
 
-  const handleSend = () => {
+  // 生成へ: 並び順・プロット・トーンを確定して Generate タブで自動開始
+  const handleGenerate = () => {
     if (!chain.orderedIds) return
     setComposition({ ...composition, anchorCardIds: chain.orderedIds })
-    setSent(true)
+    setPendingGenerate(true)
     setPhase('generate')
   }
+
+  const inputClass =
+    'w-full rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-[13px] focus:outline focus:outline-1 focus:outline-[var(--accent-border)]'
 
   return (
     <div className="flex h-full">
@@ -194,23 +206,79 @@ function ComposeInner() {
           <MiniMap pannable zoomable className="!bg-[var(--bg-sidebar)]" />
         </ReactFlow>
 
-        {/* ツールバー */}
-        <div className="absolute left-3 top-3 flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-sidebar)]/95 px-3 py-2">
-          <button
-            onClick={handleSend}
-            disabled={!chain.orderedIds}
-            className="rounded bg-[var(--accent)] px-3 py-1.5 text-[13px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            この構成を Generate へ →
-          </button>
-          <span className="text-[12px] text-[var(--text-dim)]">
-            {chain.orderedIds
-              ? `${chain.orderedIds.length} シーン（左から順に清書）`
-              : chain.reason}
-            {sent && chain.orderedIds && ' ・ 送信済み'}
-          </span>
+        {/* ステータス */}
+        <div className="absolute left-3 top-3 rounded-md border border-[var(--border)] bg-[var(--bg-sidebar)]/95 px-3 py-2 text-[12px] text-[var(--text-dim)]">
+          {chain.orderedIds ? `${chain.orderedIds.length} シーン（左から順に清書）` : chain.reason}
         </div>
       </div>
+
+      {/* 生成設定 */}
+      <aside className="flex w-[280px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-sidebar)]">
+        <div className="border-b border-[var(--border)] px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">
+          生成設定
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-3">
+          <label className="block">
+            <span className="mb-1 block text-[12px] text-[var(--text-dim)]">プロット（物語全体の方向づけ。任意）</span>
+            <textarea
+              value={composition.plot}
+              onChange={(event) => setComposition({ ...composition, plot: event.target.value })}
+              rows={4}
+              className={`${inputClass} leading-relaxed`}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] text-[var(--text-dim)]">目標トーン（結末の着地。任意）</span>
+            <select
+              value={composition.targetTone}
+              onChange={(event) => setComposition({ ...composition, targetTone: event.target.value as CardTone | '' })}
+              className={inputClass}
+            >
+              {TONE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {promptConfig && (
+            <label className="block">
+              <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
+                清書プロンプト（追加・編集は ⚙ 設定から）
+              </span>
+              <select
+                value={promptConfig.active_id ?? ''}
+                onChange={(event) => {
+                  const presetId = event.target.value || null
+                  void api.setActivePrompt('writer', presetId).then(setPromptConfig).catch(() => undefined)
+                }}
+                className={inputClass}
+              >
+                <option value="">既定</option>
+                {promptConfig.presets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        <div className="border-t border-[var(--border)] p-3">
+          <button
+            onClick={handleGenerate}
+            disabled={!chain.orderedIds}
+            className="w-full rounded bg-[var(--accent)] px-4 py-2.5 text-[14px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            生成する →
+          </button>
+          {!chain.orderedIds && (
+            <div className="mt-1.5 text-center text-[11px] text-[var(--text-faint)]">{chain.reason}</div>
+          )}
+        </div>
+      </aside>
     </div>
   )
 }

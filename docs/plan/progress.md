@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 00:30
+更新日時: 2026-07-09 00:48
 
 ## 現在地
 
@@ -100,6 +100,24 @@ Vault → Compose → Generate → Theater が一本つながった。
     （Generate 側の暫定選択 UI もそのまま使える）
   - キャンバス状態は store 保持でタブ切替に耐える（ディスク永続化は今後の課題）
   - 検証: build 成功（操作感はアプリ起動での確認待ち）
+
+- 2026-07-09: **プロンプトをプリセット管理に拡張**（作者要望: 物語の種類に合わせて変えたい）:
+  - backend: `services/prompts.py` を単一上書きから名前付きプリセット（追加/編集/削除/
+    アクティブ切替、data/prompts/presets.json 永続、旧上書きファイルは自動移行）に再設計。
+    API: GET /prompts/{kind}, POST/PUT/DELETE /prompts/{kind}/presets, PUT /prompts/{kind}/active
+  - UI: 設定画面に PromptManager（一覧 + ラジオで切替、追加、編集、削除、既定は読み取り
+    専用で「複製して編集」）。Generate 画面はプリセット選択ドロップダウンに置換
+  - 検証: build / py_compile / プリセット API E2E（作成→更新→切替→削除で既定に戻る）成功
+- 2026-07-09: **BGM を予定に追加**（作者要望）— mp3 登録 + ムード連動再生。
+  実装方向を plan.md「将来項目: BGM」に記録（data/library/bgm/ 保存、mood タグ、
+  Theater でシーンの tone_so_far に合わせてクロスフェード、設定に音量/オンオフ）
+
+- 2026-07-09: **生成の起点を Compose に集約**（作者要望: Compose で全部決めて後は生成するだけに）:
+  - Compose に「生成設定」パネル（プロット / 目標トーン / 清書プロンプト選択 / 生成する）を追加
+  - 「生成する →」で Generate タブへ自動遷移し、そのまま生成が自動開始する
+    （spec §2 判断どおり Generate は独立フェーズのまま。UI 上は実行・進行表示専用に簡素化し、
+    アンカーの手動編集 UI は撤去。構成の編集は Compose に一本化）
+  - CompositionDraft に targetTone を追加（Compose ⇄ Generate で共有）
 
 ## 未完了（plan.md の作業順序に従う）
 
