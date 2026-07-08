@@ -172,6 +172,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('models:list', async () => llama.getRuntimeSettings())
+  ipcMain.handle('models:rescan', async () => llama.rescan())
   ipcMain.handle('models:select', async (_event, modelPath: string) => {
     await llama.selectModel(modelPath)
     return { settings: await llama.getRuntimeSettings() }

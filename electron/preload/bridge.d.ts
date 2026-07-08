@@ -20,6 +20,7 @@ export interface StoryFlowBridge {
   ensureEmbedding(): Promise<EmbeddingStatus>
   stopEmbedding(): Promise<EmbeddingStatus>
   listModels(): Promise<AppSettings>
+  rescanModels(): Promise<AppSettings>
   selectModel(modelPath: string): Promise<{ settings: AppSettings }>
   ejectModel(): Promise<{ settings: AppSettings }>
   ensureLlama(): Promise<{ settings: AppSettings }>

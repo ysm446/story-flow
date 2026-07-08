@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('storyFlow', {
   ensureEmbedding: () => ipcRenderer.invoke('embedding:ensure'),
   stopEmbedding: () => ipcRenderer.invoke('embedding:stop'),
   listModels: () => ipcRenderer.invoke('models:list'),
+  rescanModels: () => ipcRenderer.invoke('models:rescan'),
   selectModel: (modelPath: string) => ipcRenderer.invoke('models:select', modelPath),
   ejectModel: () => ipcRenderer.invoke('models:eject'),
   ensureLlama: () => ipcRenderer.invoke('llama:ensure'),
