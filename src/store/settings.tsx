@@ -5,6 +5,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
  * サーバ・モデル関連はセットアップパネル（Electron main 管理）、こちらは表示・演出の設定。
  */
 export interface UiSettings {
+  /** Generate: カードの画像を writer に見せて描写に反映する（vision 対応モデルのみ有効） */
+  generateIncludeImages: boolean
   /** Theater: 本文を 1 文字ずつストリーミング表示する（タイプライター演出） */
   theaterTextStreaming: boolean
   /** Theater: 文字送りの間隔（ms/字。小さいほど速い） */
@@ -20,6 +22,7 @@ export interface UiSettings {
 }
 
 const DEFAULT_SETTINGS: UiSettings = {
+  generateIncludeImages: true,
   theaterTextStreaming: true,
   theaterTextStreamMsPerChar: 45,
   theaterFontSizePx: 16,

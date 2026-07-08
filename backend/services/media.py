@@ -9,6 +9,7 @@ image-assistant の image_library.py と同方式:
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import subprocess
@@ -16,7 +17,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from backend.db.database import get_media_dir, get_thumbs_dir, to_relative
+from backend.db.database import get_media_dir, get_thumbs_dir, resolve_path, to_relative
 
 THUMB_MAX = 420
 THUMB_QUALITY = 88
@@ -54,6 +55,32 @@ def thumb_relative_for(media_relative: str) -> str:
     """メディア相対パスから対応するサムネイル相対パスを導出する（存在保証はしない）。"""
     stem = Path(media_relative).stem
     return f"thumbs/{stem}.jpg"
+
+
+def media_preview_data_url(media_relative: str, media_type: str | None) -> str | None:
+    """LLM に渡すためのプレビュー画像（base64 data URL）を返す。
+
+    サムネイル（最大 420px JPEG）を優先し、無ければ画像原本からその場で縮小する。
+    動画でサムネイルが無い場合は None（ffmpeg が無かったケース）。
+    """
+    thumb_path = resolve_path(thumb_relative_for(media_relative))
+    if thumb_path.exists():
+        return "data:image/jpeg;base64," + base64.b64encode(thumb_path.read_bytes()).decode("ascii")
+
+    if media_type != "image":
+        return None
+    media_path = resolve_path(media_relative)
+    if not media_path.exists():
+        return None
+    try:
+        with Image.open(media_path) as image:
+            image = image.convert("RGB")
+            image.thumbnail((THUMB_MAX, THUMB_MAX))
+            buffer = io.BytesIO()
+            image.save(buffer, "JPEG", quality=THUMB_QUALITY)
+        return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+    except Exception:
+        return None
 
 
 def _ensure_thumbnail(media_path: Path, media_type: str, digest: str, data: bytes) -> None:

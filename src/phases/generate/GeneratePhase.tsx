@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Card, type GenerateEvent } from '../../lib/api'
 import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
+import { useUiSettings } from '../../store/settings'
 
 const ROLE_LABELS: Record<string, string> = {
   intro: '導入',
@@ -29,6 +30,7 @@ type RunStatus = 'idle' | 'starting-model' | 'generating' | 'done' | 'error'
  */
 export function GeneratePhase() {
   const { composition, setPhase, pendingGenerate, setPendingGenerate, workspaceId } = useAppStore()
+  const { settings: uiSettings } = useUiSettings()
   const [allCards, setAllCards] = useState<Card[]>([])
   const [status, setStatus] = useState<RunStatus>('idle')
   const [scenes, setScenes] = useState<SceneEvent[]>([])
@@ -72,7 +74,9 @@ export function GeneratePhase() {
           writer_base_url: settings.llamaBaseUrl,
           workspace_id: workspaceId,
           prompt_preset_id: composition.promptPresetId,
-          scene_length: composition.sceneLength || null
+          scene_length: composition.sceneLength || null,
+          // vision 非対応モデル（mmproj なし）のときは自動でオフ
+          include_images: uiSettings.generateIncludeImages && settings.supportsVision
         },
         (event) => {
           if (event.type === 'delta') {

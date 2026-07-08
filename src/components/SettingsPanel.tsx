@@ -23,6 +23,25 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
       <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
         <section className="space-y-2">
+          <h3 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">Generate（生成）</h3>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={settings.generateIncludeImages}
+              onChange={(event) => updateSettings({ generateIncludeImages: event.target.checked })}
+              className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="block text-[13px]">カードの画像を清書に反映</span>
+              <span className="mt-0.5 block text-[12px] leading-relaxed text-[var(--text-faint)]">
+                清書時にシーンのメディア（サムネイル）を LLM に見せ、写っている情景を描写へ反映します。
+                vision 対応モデル（mmproj あり）でのみ有効。生成時間は少し伸びます。
+              </span>
+            </span>
+          </label>
+        </section>
+
+        <section className="space-y-2">
           <h3 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">Theater（鑑賞）</h3>
           <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
             <input

@@ -109,11 +109,21 @@ class _ProseStreamExtractor:
         return "".join(output)
 
 
+def _build_user_content(user_prompt: str, images: list[str] | None):
+    """テキストのみなら str、画像付きなら OpenAI 互換の content パーツ配列を返す。"""
+    if not images:
+        return user_prompt
+    parts: list[dict] = [{"type": "text", "text": user_prompt}]
+    parts.extend({"type": "image_url", "image_url": {"url": url}} for url in images)
+    return parts
+
+
 def chat_completion_json_stream(
     base_url: str,
     system_prompt: str,
     user_prompt: str,
     temperature: float = 0.8,
+    images: list[str] | None = None,
 ):
     """ストリーミング版。('delta', prose断片) を逐次 yield し、最後に ('done', dict) を yield する。
 
@@ -121,7 +131,7 @@ def chat_completion_json_stream(
     """
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        {"role": "user", "content": _build_user_content(user_prompt, images)},
     ]
     payload = {
         "model": "local-model",
@@ -162,7 +172,7 @@ def chat_completion_json_stream(
         parsed = extract_json("".join(content_parts))
     except LlmError:
         # ストリーム出力が壊れていた場合は非ストリーミングで作り直す
-        parsed = chat_completion_json(base_url, system_prompt, user_prompt, temperature)
+        parsed = chat_completion_json(base_url, system_prompt, user_prompt, temperature, images)
     yield ("done", parsed)
 
 
@@ -171,6 +181,7 @@ def chat_completion_json(
     system_prompt: str,
     user_prompt: str,
     temperature: float = 0.8,
+    images: list[str] | None = None,
 ) -> dict:
     """OpenAI 互換 /v1/chat/completions を叩き、JSON オブジェクトを受け取る。
 
@@ -179,7 +190,7 @@ def chat_completion_json(
     """
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        {"role": "user", "content": _build_user_content(user_prompt, images)},
     ]
 
     last_error: LlmError | None = None

@@ -77,16 +77,21 @@ def write_scene_stream(
     system_prompt: str,
     scene_length: str | None = None,
     instruction: str | None = None,
+    image_data_url: str | None = None,
 ):
     """write_scene のストリーミング版 generator。
 
     ('delta', 清書文の断片) を逐次 yield し、最後に ('scene', prose, 更新後 StoryState) を yield する。
+    image_data_url があれば vision 対応モデル向けにシーンのメディアを添付する。
     """
     system = f"{system_prompt.strip()}\n\n{OUTPUT_FORMAT_INSTRUCTION}"
-    user = _build_user_prompt(card, state, plot, target_tone, position, scene_length, instruction)
+    user = _build_user_prompt(
+        card, state, plot, target_tone, position, scene_length, instruction, with_image=image_data_url is not None
+    )
 
+    images = [image_data_url] if image_data_url else None
     result: dict | None = None
-    for kind, payload in chat_completion_json_stream(base_url, system, user):
+    for kind, payload in chat_completion_json_stream(base_url, system, user, images=images):
         if kind == "delta":
             yield ("delta", payload)
         else:
@@ -113,6 +118,7 @@ def _build_user_prompt(
     position: str,
     scene_length: str | None = None,
     instruction: str | None = None,
+    with_image: bool = False,
 ) -> str:
     parts: list[str] = []
     if plot.strip():
@@ -135,5 +141,10 @@ def _build_user_prompt(
     parts.append(f"## このシーンのブリーフ（作者の指示・アイデア）\n{card.get('brief', '')}")
     if instruction and instruction.strip():
         parts.append(f"## この作品でのこのシーンへの追加指示\n{instruction.strip()}")
+    if with_image:
+        parts.append(
+            "## 添付画像\n添付した画像は、このシーンの背景として表示されるメディアです。"
+            "写っている情景・色・光・人物の佇まいを描写に自然に反映してください（画像の説明文にはしない）。"
+        )
     parts.append("上記ブリーフ（と追加指示があればそれも）を、確定事実と矛盾しない 1 シーンの地の文に清書してください。")
     return "\n\n".join(parts)

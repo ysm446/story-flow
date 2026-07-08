@@ -208,6 +208,7 @@ export interface GenerateInput {
   workspace_id: string | null
   prompt_preset_id: string | null
   scene_length: SceneLength | null
+  include_images: boolean
 }
 
 export function cardFileUrl(cardId: string, thumb: boolean): string {

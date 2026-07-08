@@ -15,6 +15,7 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 
 from backend.db.database import get_connection
+from backend.services.media import media_preview_data_url
 from backend.services.state import StoryState
 from backend.services.writer import write_scene_stream
 
@@ -27,6 +28,7 @@ def generate_stream(
     system_prompt: str,
     workspace_id: str | None = None,
     scene_length: str | None = None,
+    include_images: bool = False,
 ) -> Iterator[dict]:
     """アンカー列（v1: FIXED のみ）を左から逐次清書し、シーン毎に dict を yield する。
 
@@ -44,6 +46,9 @@ def generate_stream(
     for index, slot in enumerate(slots):
         card = slot["card"]
         position = "opening" if index == 0 else ("ending" if index == total - 1 else "middle")
+        image_data_url = None
+        if include_images and card.get("media_path"):
+            image_data_url = media_preview_data_url(card["media_path"], card.get("media_type"))
         prose = ""
         for event in write_scene_stream(
             card=card,
@@ -55,6 +60,7 @@ def generate_stream(
             system_prompt=system_prompt,
             scene_length=scene_length,
             instruction=slot.get("instruction"),
+            image_data_url=image_data_url,
         ):
             if event[0] == "delta":
                 yield {"type": "delta", "position": index, "text": event[1]}

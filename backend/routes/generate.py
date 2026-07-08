@@ -34,6 +34,7 @@ class GenerateInput(BaseModel):
     workspace_id: str | None = None  # 生成元ワークスペース（story に紐付く）
     prompt_preset_id: str | None = None  # ワークスペースの清書プロンプト。無効/未指定なら既定側
     scene_length: Literal["short", "standard", "long"] | None = None  # シーンの目安の長さ
+    include_images: bool = False  # カードのメディアを writer に見せる（vision 対応モデル向け）
 
 
 def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
@@ -70,6 +71,7 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
                 system_prompt=system_prompt,
                 workspace_id=payload.workspace_id,
                 scene_length=payload.scene_length,
+                include_images=payload.include_images,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except LlmError as error:
