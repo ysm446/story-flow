@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   plot              TEXT NOT NULL DEFAULT '',
   target_tone       TEXT CHECK(target_tone IN ('happy','bad','bitter','neutral') OR target_tone IS NULL),
   prompt_preset_id  TEXT,               -- NULL = 既定プロンプト
+  scene_length      TEXT CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL),
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );

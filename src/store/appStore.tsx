@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import type { CardTone } from '../lib/api'
+import type { CardTone, SceneLength } from '../lib/api'
 
 export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 
@@ -14,6 +14,7 @@ export interface CompositionDraft {
   plot: string
   targetTone: CardTone | ''
   promptPresetId: string | null
+  sceneLength: SceneLength | ''
 }
 
 interface AppStore {
@@ -42,7 +43,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     anchorCardIds: [],
     plot: '',
     targetTone: '',
-    promptPresetId: null
+    promptPresetId: null,
+    sceneLength: ''
   })
   const [composeNodes, setComposeNodes] = useState<Node[]>([])
   const [composeEdges, setComposeEdges] = useState<Edge[]>([])

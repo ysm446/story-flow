@@ -28,6 +28,7 @@ class GenerateInput(BaseModel):
     writer_base_url: str | None = None  # 未指定なら環境変数 STORY_FLOW_WRITER_URL
     workspace_id: str | None = None  # 生成元ワークスペース（story に紐付く）
     prompt_preset_id: str | None = None  # ワークスペースの清書プロンプト。無効/未指定なら既定側
+    scene_length: Literal["short", "standard", "long"] | None = None  # シーンの目安の長さ
 
 
 def _load_cards(card_ids: list[str]) -> list[dict]:
@@ -63,6 +64,7 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
                 writer_base_url=writer_base_url,
                 system_prompt=system_prompt,
                 workspace_id=payload.workspace_id,
+                scene_length=payload.scene_length,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except LlmError as error:

@@ -78,3 +78,10 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     story_columns = {row["name"] for row in conn.execute("PRAGMA table_info(stories)")}
     if "workspace_id" not in story_columns:
         conn.execute("ALTER TABLE stories ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)")
+
+    workspace_columns = {row["name"] for row in conn.execute("PRAGMA table_info(workspaces)")}
+    if workspace_columns and "scene_length" not in workspace_columns:
+        conn.execute(
+            "ALTER TABLE workspaces ADD COLUMN scene_length TEXT"
+            " CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL)"
+        )

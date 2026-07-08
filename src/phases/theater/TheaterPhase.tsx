@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, cardFileUrl, type Card, type StoryDetail, type StorySummary, type WorkspaceSummary } from '../../lib/api'
 import { useUiSettings } from '../../store/settings'
 
@@ -183,6 +183,7 @@ function StoryPlayer({
   const [finished, setFinished] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [visibleChars, setVisibleChars] = useState(0)
+  const textRef = useRef<HTMLDivElement>(null)
 
   const scene = scenes[index]
   const isStreaming = uiSettings.theaterTextStreaming
@@ -190,7 +191,34 @@ function StoryPlayer({
   // 本文ストリーミング: シーン切替でリセットし、1 文字ずつ増やす（一時停止で止まる）
   useEffect(() => {
     setVisibleChars(0)
+    if (textRef.current) textRef.current.scrollTop = 0
   }, [index])
+
+  // ストリーミング中は最新の行が見えるように追従スクロール
+  useEffect(() => {
+    if (!isStreaming) return
+    const el = textRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [visibleChars, isStreaming])
+
+  // ストリーミングオフで長文がはみ出す場合は、表示時間に合わせてゆっくり自動スクロール
+  useEffect(() => {
+    if (isStreaming || paused || finished || !scene) return
+    const el = textRef.current
+    if (!el) return
+    const maxScroll = el.scrollHeight - el.clientHeight
+    if (maxScroll <= 0) return
+    // 冒頭 2 秒は静止、最後の 2 秒は最下部で静止する配分
+    const duration = Math.max(1_000, sceneDurationMs(scene.prose) - 4_000)
+    const startTop = el.scrollTop
+    const startedAt = Date.now() + 2_000
+    const timer = setInterval(() => {
+      const progress = Math.min(1, Math.max(0, (Date.now() - startedAt) / duration))
+      el.scrollTop = startTop + (maxScroll - startTop) * progress
+      if (progress >= 1) clearInterval(timer)
+    }, 50)
+    return () => clearInterval(timer)
+  }, [index, isStreaming, paused, finished, scene])
 
   useEffect(() => {
     if (!isStreaming || paused || finished || !scene) return
@@ -283,15 +311,14 @@ function StoryPlayer({
         )
       })}
 
-      {/* 本文（ストリーミング時は全文で高さを確保し、上に可視分を重ねてレイアウトのずれを防ぐ） */}
+      {/* 本文（最大高を超える長文はスクロール。ストリーミング時は追従、オフ時はオート） */}
       {!finished && scene && (
         <div key={scene.id} className="absolute inset-x-0 bottom-0 px-10 pb-14 pt-6">
-          <p className="relative mx-auto max-w-2xl whitespace-pre-wrap text-[16px] leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
-            <span className="invisible">{scene.prose}</span>
-            <span className="absolute inset-0 whitespace-pre-wrap">
+          <div ref={textRef} className="no-scrollbar mx-auto max-h-[38vh] max-w-2xl overflow-y-auto">
+            <p className="whitespace-pre-wrap text-[16px] leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
               {isStreaming ? scene.prose.slice(0, visibleChars) : scene.prose}
-            </span>
-          </p>
+            </p>
+          </div>
         </div>
       )}
 

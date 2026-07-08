@@ -110,6 +110,8 @@ export interface WorkspaceSummary {
   updated_at: string
 }
 
+export type SceneLength = 'short' | 'standard' | 'long'
+
 export interface Workspace {
   id: string
   name: string
@@ -117,6 +119,7 @@ export interface Workspace {
   plot: string
   target_tone: CardTone | null
   prompt_preset_id: string | null
+  scene_length: SceneLength | null
   created_at: string
   updated_at: string
 }
@@ -129,6 +132,8 @@ export interface WorkspaceUpdateInput {
   clear_target_tone?: boolean
   prompt_preset_id?: string | null
   clear_prompt_preset?: boolean
+  scene_length?: SceneLength | null
+  clear_scene_length?: boolean
 }
 
 export interface StoryScene {
@@ -193,6 +198,7 @@ export interface GenerateInput {
   writer_base_url: string | null
   workspace_id: string | null
   prompt_preset_id: string | null
+  scene_length: SceneLength | null
 }
 
 export function cardFileUrl(cardId: string, thumb: boolean): string {

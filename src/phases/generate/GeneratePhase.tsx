@@ -69,7 +69,8 @@ export function GeneratePhase() {
           target_tone: composition.targetTone || null,
           writer_base_url: settings.llamaBaseUrl,
           workspace_id: workspaceId,
-          prompt_preset_id: composition.promptPresetId
+          prompt_preset_id: composition.promptPresetId,
+          scene_length: composition.sceneLength || null
         },
         (event) => {
           if (event.type === 'scene') {

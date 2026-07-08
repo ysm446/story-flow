@@ -40,6 +40,13 @@ POSITION_LABELS = {
     "ending": "物語の結末（最終シーン）",
 }
 
+# シーンの目安文字数（ローカル LLM は厳密には守らないため「目安」として指示する）
+SCENE_LENGTH_CHARS = {
+    "short": 150,
+    "standard": 300,
+    "long": 600,
+}
+
 
 def write_scene(
     card: dict,
@@ -49,10 +56,11 @@ def write_scene(
     position: str,
     base_url: str,
     system_prompt: str,
+    scene_length: str | None = None,
 ) -> tuple[str, StoryState]:
     """カード 1 枚を清書し、(prose, 更新後 StoryState) を返す。"""
     system = f"{system_prompt.strip()}\n\n{OUTPUT_FORMAT_INSTRUCTION}"
-    user = _build_user_prompt(card, state, plot, target_tone, position)
+    user = _build_user_prompt(card, state, plot, target_tone, position, scene_length)
 
     result = chat_completion_json(base_url, system, user)
 
@@ -71,6 +79,7 @@ def _build_user_prompt(
     plot: str,
     target_tone: str | None,
     position: str,
+    scene_length: str | None = None,
 ) -> str:
     parts: list[str] = []
     if plot.strip():
@@ -85,6 +94,8 @@ def _build_user_prompt(
         f"- 位置: {POSITION_LABELS.get(position, position)}",
         f"- ロール: {card.get('role')}",
     ]
+    if scene_length in SCENE_LENGTH_CHARS:
+        scene_info.append(f"- 目安の長さ: 約 {SCENE_LENGTH_CHARS[scene_length]} 字（多少前後してよい）")
     if position == "ending" and target_tone:
         scene_info.append(f"- 着地させるトーン: {target_tone}")
     parts.append("## 今回のシーン\n" + "\n".join(scene_info))

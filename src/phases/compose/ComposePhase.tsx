@@ -22,6 +22,7 @@ import {
   type CardRole,
   type CardTone,
   type PromptConfig,
+  type SceneLength,
   type Workspace,
   type WorkspaceGraph,
   type WorkspaceSummary
@@ -42,6 +43,13 @@ const TONE_OPTIONS: Array<{ value: CardTone | ''; label: string }> = [
   { value: 'bad', label: 'バッド' },
   { value: 'bitter', label: 'ビター' },
   { value: 'neutral', label: 'ニュートラル' }
+]
+
+const SCENE_LENGTH_OPTIONS: Array<{ value: SceneLength | ''; label: string }> = [
+  { value: '', label: '指定なし（プロンプト任せ）' },
+  { value: 'short', label: '短め（約 150 字）' },
+  { value: 'standard', label: '標準（約 300 字）' },
+  { value: 'long', label: '長め（約 600 字）' }
 ]
 
 const LAST_WORKSPACE_KEY = 'story-flow:last-workspace'
@@ -233,7 +241,8 @@ function ComposeInner() {
         anchorCardIds: [],
         plot: workspace.plot,
         targetTone: workspace.target_tone ?? '',
-        promptPresetId: workspace.prompt_preset_id
+        promptPresetId: workspace.prompt_preset_id,
+        sceneLength: workspace.scene_length ?? ''
       })
       setWorkspaceId(workspace.id)
       localStorage.setItem(LAST_WORKSPACE_KEY, workspace.id)
@@ -294,7 +303,10 @@ function ComposeInner() {
       ...(composition.targetTone ? { target_tone: composition.targetTone as CardTone } : { clear_target_tone: true }),
       ...(composition.promptPresetId
         ? { prompt_preset_id: composition.promptPresetId }
-        : { clear_prompt_preset: true })
+        : { clear_prompt_preset: true }),
+      ...(composition.sceneLength
+        ? { scene_length: composition.sceneLength as SceneLength }
+        : { clear_scene_length: true })
     }
   }, [nodes, edges, composition])
 
@@ -556,6 +568,23 @@ function ComposeInner() {
               className={inputClass}
             >
               {TONE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] text-[var(--text-dim)]">シーンの長さ</span>
+            <select
+              value={composition.sceneLength}
+              onChange={(event) =>
+                setComposition({ ...composition, sceneLength: event.target.value as SceneLength | '' })
+              }
+              className={inputClass}
+            >
+              {SCENE_LENGTH_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>

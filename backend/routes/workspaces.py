@@ -34,6 +34,8 @@ class WorkspaceUpdateInput(BaseModel):
     clear_target_tone: bool = False  # target_tone を NULL に戻すためのフラグ
     prompt_preset_id: str | None = None
     clear_prompt_preset: bool = False
+    scene_length: Literal["short", "standard", "long"] | None = None
+    clear_scene_length: bool = False
 
 
 def _now() -> str:
@@ -114,10 +116,14 @@ def update_workspace(workspace_id: str, payload: WorkspaceUpdateInput) -> dict:
             prompt_preset_id = (
                 payload.prompt_preset_id if payload.prompt_preset_id is not None else current["prompt_preset_id"]
             )
+        if payload.clear_scene_length:
+            scene_length = None
+        else:
+            scene_length = payload.scene_length if payload.scene_length is not None else current["scene_length"]
         conn.execute(
-            "UPDATE workspaces SET name = ?, graph = ?, plot = ?, target_tone = ?, prompt_preset_id = ?, updated_at = ?"
-            " WHERE id = ?",
-            (name, graph, plot, target_tone, prompt_preset_id, _now(), workspace_id),
+            "UPDATE workspaces SET name = ?, graph = ?, plot = ?, target_tone = ?, prompt_preset_id = ?,"
+            " scene_length = ?, updated_at = ? WHERE id = ?",
+            (name, graph, plot, target_tone, prompt_preset_id, scene_length, _now(), workspace_id),
         )
         conn.commit()
         return _row_to_workspace(_get_row(conn, workspace_id))
@@ -133,8 +139,9 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
         new_id = str(uuid.uuid4())
         now = _now()
         conn.execute(
-            "INSERT INTO workspaces (id, name, graph, plot, target_tone, prompt_preset_id, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO workspaces"
+            " (id, name, graph, plot, target_tone, prompt_preset_id, scene_length, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 new_id,
                 payload.name.strip(),
@@ -142,6 +149,7 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
                 source["plot"],
                 source["target_tone"],
                 source["prompt_preset_id"],
+                source["scene_length"],
                 now,
                 now,
             ),

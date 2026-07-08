@@ -26,6 +26,7 @@ def generate_stream(
     writer_base_url: str,
     system_prompt: str,
     workspace_id: str | None = None,
+    scene_length: str | None = None,
 ) -> Iterator[dict]:
     """アンカー列（v1: FIXED のみ）を左から逐次清書し、シーン毎に dict を yield する。
 
@@ -47,6 +48,7 @@ def generate_stream(
             position=position,
             base_url=writer_base_url,
             system_prompt=system_prompt,
+            scene_length=scene_length,
         )
         scene = {
             "position": index,

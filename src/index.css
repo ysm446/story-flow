@@ -95,6 +95,14 @@ textarea {
 .kenburns-2 { animation: kenburns-2 30s ease-out forwards; }
 .kenburns-3 { animation: kenburns-3 30s ease-out forwards; }
 
+/* Theater: 本文スクロール領域（スクロールバーは見せない） */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Theater: シーンレイヤーのクロスフェード */
 .theater-layer {
   position: absolute;
