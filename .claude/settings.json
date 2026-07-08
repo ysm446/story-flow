@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Read(//d/GitHub/lm-graph/src/renderer/src/**)",
-      "Read(//d/GitHub/lm-graph/src/main/**)"
+      "Read(//d/GitHub/lm-graph/src/main/**)",
+      "Read(//d/GitHub/lm-graph/src/preload/**)",
+      "PowerShell(npm run build)",
+      "PowerShell($py = \"d:\\\\GitHub\\\\story-flow\\\\.venv\\\\Scripts\\\\python.exe\"; if \\(-not \\(Test-Path $py\\)\\) { python -m venv \"d:\\\\GitHub\\\\story-flow\\\\.venv\" }; & $py --version)",
+      "PowerShell(py -m venv \"d:\\\\GitHub\\\\story-flow\\\\.venv\")",
+      "PowerShell(& \"d:\\\\GitHub\\\\story-flow\\\\.venv\\\\Scripts\\\\python.exe\" --version)",
+      "PowerShell(& \"d:\\\\GitHub\\\\story-flow\\\\.venv\\\\Scripts\\\\python.exe\" -m pip install --quiet -r \"d:\\\\GitHub\\\\story-flow\\\\backend\\\\requirements.txt\")",
+      "PowerShell($py = \"d:\\\\GitHub\\\\story-flow\\\\.venv\\\\Scripts\\\\python.exe\"; $proc = Start-Process -FilePath $py -ArgumentList \"-m\",\"uvicorn\",\"backend.main:app\",\"--host\",\"127.0.0.1\",\"--port\",\"8600\" -WorkingDirectory \"d:\\\\GitHub\\\\story-flow\" -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 4; try { $health = Invoke-RestMethod \"http://127.0.0.1:8600/health\"; $stats = Invoke-RestMethod \"http://127.0.0.1:8600/vault/stats\"; $stories = Invoke-RestMethod \"http://127.0.0.1:8600/stories\"; Write-Output \"health: $\\($health.status\\)\"; Write-Output \"stats: total=$\\($stats.total\\) roles=$\\($stats.by_role | ConvertTo-Json -Compress\\)\"; Write-Output \"stories: $\\($stories.stories.Count\\) 件\" } finally { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue })",
+      "PowerShell(git add -A)"
     ]
   }
 }

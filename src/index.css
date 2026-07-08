@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* テーマトークン（lm-graph から引き継ぎ。docs/rules/electron-design-rules.md 準拠） */
+:root {
+  color-scheme: dark;
+  --bg: #0d0f14;
+  --bg-sidebar: #111318;
+  --bg-canvas: #181b23;
+  --bg-input: #1a1d27;
+  --bg-card: #1c1f2b;
+  --bg-elevated: rgba(32, 35, 48, 0.5);
+  --border: #252830;
+  --border-strong: #2e3140;
+  --text: #e2e4ef;
+  --text-dim: #9499b0;
+  --text-faint: #5c6078;
+  --accent: #7c5af7;
+  --accent-hover: #6d4de6;
+  --accent-soft: rgba(124, 90, 247, 0.12);
+  --accent-border: rgba(124, 90, 247, 0.35);
+  --danger: #ef4444;
+  --ok: #34d399;
+  font-family: system-ui, -apple-system, "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 14px;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+input,
+textarea,
+select {
+  color: var(--text);
+}
+
+textarea {
+  resize: vertical;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

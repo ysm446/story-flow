@@ -1,12 +1,12 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-08 17:02
+更新日時: 2026-07-08 22:59
 
 ## 現在地
 
-**企画・設計フェーズ完了。実装は未着手**（`lm-graph` のフォーク取り込みもまだ）。
-リポジトリにはドキュメントのみが存在する。
+**フェーズ 0（足場づくり）完了**。Electron + React + FastAPI の骨格が動く状態。
+次はフェーズ 1（Vault）の実装から。
 
 ## 完了済み
 
@@ -27,9 +27,23 @@
   `models/Qwen3-Embedding-4B-GGUF/` に配置済み。image-assistant の `embedding_client.py`
   と同方式・同モデルのため、ほぼそのまま流用できる
 
+- 2026-07-08: **フェーズ 0 完了** — 足場一式を実装し検証済み:
+  - フロント: electron-vite + React 19 + Tailwind + CSS 変数テーマ。`electron/`（main/preload）と
+    `src/`（renderer）に分離し、`src/phases/{vault,compose,generate,theater}` の 4 相構成を確立
+  - Electron main: lm-graph から `llamaServer.ts` / `llamaInstaller.ts` を移植（runtime/ 専用に調整、
+    embedding 用 GGUF は writer モデル一覧から除外）。`backend.ts` が venv の python で FastAPI を
+    自動起動。preload は `window.storyFlow` ブリッジ
+  - UI: 4 フェーズタブ + セットアップパネル（llama-server インストーラ: リリース取得 → バックエンド
+    選択 → 進捗バー付きダウンロード → models/ の GGUF ロード）。未インストール時は自動で開く
+  - backend: FastAPI 骨格 + `db/schema.sql`（6 テーブル、EMBED_DIM=2560 で card_vec 作成）+
+    routes（cards/generate/stories。一覧・stats・stories は動作、書き込み系は 501 スタブ）+
+    services（state.py は実装済み、他はシグネチャ確定済みスタブ）+ prompts 既定値
+  - `start.bat`（venv / npm の初回セットアップ + 起動。py ランチャー優先）
+  - 検証: `npm run build` 成功、全 .py py_compile 成功、uvicorn 起動 → /health・/vault/stats・
+    /stories 疎通確認、`data/library/story-flow.sqlite3` 生成確認
+
 ## 未完了（plan.md の作業順序に従う）
 
-- [ ] フェーズ 0: lm-graph フォーク取り込み + FastAPI 骨格 + `db/schema.sql`
 - [ ] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）
 - [ ] フェーズ 2: Generate 逐次パイプライン（穴埋めなし）
 - [ ] フェーズ 3: Theater
@@ -38,8 +52,13 @@
 
 ## 次の一手
 
-フェーズ 0 の開始。`lm-graph` のコードをこのリポジトリに取り込み、
-`src/phases/` 構成への分割方針を決めてから Vault に着手する。
+フェーズ 1（Vault）: カード CRUD（POST/PUT/DELETE /cards の実装）、メディアアップロード
+（sha256 命名 + サムネイル生成）、埋め込み計算（services/embedding.py — image-assistant の
+embedding_client.py を移植し、embedding 用 llama-server の起動管理を Electron main に追加）、
+cards_fts 投入、Vault UI（一覧グリッド + 登録フォーム）。
+
+- 起動は `start.bat`（初回は venv + npm install を自動セットアップ）
+- 環境注意: この PC の `python` は Windows Store スタブのため `py` ランチャーを使う
 
 ## 注意点・申し送り
 
