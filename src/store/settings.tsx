@@ -7,6 +7,12 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 export interface UiSettings {
   /** Theater: 本文を 1 文字ずつストリーミング表示する（タイプライター演出） */
   theaterTextStreaming: boolean
+  /** Theater: 文字送りの間隔（ms/字。小さいほど速い） */
+  theaterTextStreamMsPerChar: number
+  /** Theater: 本文のフォントサイズ（px） */
+  theaterFontSizePx: number
+  /** Theater: 再生ステージのサイズ（画面に対する %。100 = 全面） */
+  theaterStageScale: number
   /** Theater: 動画ループの継ぎ目をクロスディゾルブで繋ぐ */
   theaterVideoLoopCrossfade: boolean
   /** Theater: クロスディゾルブの長さ（秒） */
@@ -15,6 +21,9 @@ export interface UiSettings {
 
 const DEFAULT_SETTINGS: UiSettings = {
   theaterTextStreaming: true,
+  theaterTextStreamMsPerChar: 45,
+  theaterFontSizePx: 16,
+  theaterStageScale: 100,
   theaterVideoLoopCrossfade: true,
   theaterVideoCrossfadeSeconds: 1.0
 }

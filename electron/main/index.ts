@@ -117,6 +117,19 @@ function registerIpc(): void {
   ipcMain.handle('backend:status', async () => backendManager.getStatus())
   ipcMain.handle('backend:ensure', async () => backendManager.ensureRunning())
 
+  // Theater の全画面再生用
+  ipcMain.handle('window:setFullScreen', (event, value: boolean) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    window?.setFullScreen(value)
+    return window?.isFullScreen() ?? false
+  })
+  ipcMain.handle('window:toggleFullScreen', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return false
+    window.setFullScreen(!window.isFullScreen())
+    return window.isFullScreen()
+  })
+
   ipcMain.handle('embedding:status', async () => embedding.getStatus())
   ipcMain.handle('embedding:ensure', async () => embedding.ensureRunning())
   ipcMain.handle('embedding:stop', async () => {

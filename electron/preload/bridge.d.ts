@@ -13,6 +13,8 @@ export interface StoryFlowBridge {
   bootstrap(): Promise<BootstrapPayload>
   getBackendStatus(): Promise<BackendStatus>
   ensureBackend(): Promise<BackendStatus>
+  setFullScreen(value: boolean): Promise<boolean>
+  toggleFullScreen(): Promise<boolean>
   getEmbeddingStatus(): Promise<EmbeddingStatus>
   ensureEmbedding(): Promise<EmbeddingStatus>
   stopEmbedding(): Promise<EmbeddingStatus>

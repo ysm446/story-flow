@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('storyFlow', {
   bootstrap: () => ipcRenderer.invoke('bootstrap'),
   getBackendStatus: () => ipcRenderer.invoke('backend:status'),
   ensureBackend: () => ipcRenderer.invoke('backend:ensure'),
+  setFullScreen: (value: boolean) => ipcRenderer.invoke('window:setFullScreen', value),
+  toggleFullScreen: () => ipcRenderer.invoke('window:toggleFullScreen'),
   getEmbeddingStatus: () => ipcRenderer.invoke('embedding:status'),
   ensureEmbedding: () => ipcRenderer.invoke('embedding:ensure'),
   stopEmbedding: () => ipcRenderer.invoke('embedding:stop'),

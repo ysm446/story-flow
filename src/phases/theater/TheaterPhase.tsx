@@ -2,59 +2,88 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, cardFileUrl, type Card, type StoryDetail, type StorySummary, type WorkspaceSummary } from '../../lib/api'
 import { useUiSettings } from '../../store/settings'
 
-// 本文ストリーミング（タイプライター演出）の 1 文字あたりの間隔
-const STREAM_INTERVAL_MS = 45
-
 // 動画ループのクロスディゾルブ時間（秒）
 const VIDEO_CROSSFADE_SECONDS = 1.0
 
 /**
  * ループの継ぎ目をクロスディゾルブで繋ぐ動画プレイヤー。
- * 同じ動画を 2 枚重ね、終端 fadeSeconds 手前でもう 1 枚を頭から再生開始し、
- * opacity のフェードで重ねる。フェードの 2 倍より短い動画は通常ループにフォールバック。
+ * 同じ動画を 2 枚重ね、終端 fadeSeconds 手前でもう 1 枚を頭から再生開始する。
+ *
+ * 暗転対策: 2 枚を同時にフェード（1→0 と 0→1）すると中間点で合成不透明度が
+ * 1 を下回り背景の黒が透ける（0.5 + 0.5×0.5 = 0.75）。そのため
+ * 「下の動画は不透明のまま残し、上に重ねた新しい動画だけをフェードイン」する。
+ * フェードの 2 倍より短い動画は通常ループにフォールバック。
  */
 function CrossfadeLoopVideo({ src, fadeSeconds = VIDEO_CROSSFADE_SECONDS }: { src: string; fadeSeconds?: number }) {
   const videoARef = useRef<HTMLVideoElement>(null)
   const videoBRef = useRef<HTMLVideoElement>(null)
-  const [activeIndex, setActiveIndex] = useState(0)
+  const activeIndex = useRef(0)
   const switching = useRef(false)
 
   const refOf = (index: number) => (index === 0 ? videoARef : videoBRef)
 
   useEffect(() => {
+    activeIndex.current = 0
     switching.current = false
-    setActiveIndex(0)
-    const video = videoARef.current
-    if (video) {
-      video.currentTime = 0
-      void video.play().catch(() => undefined)
+    const first = videoARef.current
+    const second = videoBRef.current
+    if (first) {
+      first.style.transition = 'none'
+      first.style.opacity = '1'
+      first.style.zIndex = '2'
+      first.currentTime = 0
+      void first.play().catch(() => undefined)
+    }
+    if (second) {
+      second.style.transition = 'none'
+      second.style.opacity = '0'
+      second.style.zIndex = '1'
+      second.pause()
     }
   }, [src])
 
   const handleTimeUpdate = (index: number) => {
-    if (index !== activeIndex || switching.current) return
+    if (index !== activeIndex.current || switching.current) return
     const current = refOf(index).current
     const next = refOf(1 - index).current
     if (!current || !next) return
 
     const { duration, currentTime } = current
     if (!Number.isFinite(duration) || duration <= fadeSeconds * 2) return // 短尺は onEnded の通常ループ
-    if (duration - currentTime > fadeSeconds) return
+    // timeupdate の発火間隔（〜250ms）で取りこぼさないよう少し余裕を持って開始する
+    if (duration - currentTime > fadeSeconds + 0.3) return
 
     switching.current = true
+    activeIndex.current = 1 - index
+
+    // 旧側: 不透明のまま下に残す（フェードさせない = 黒が透けない）
+    current.style.transition = 'none'
+    current.style.zIndex = '1'
+    current.style.opacity = '1'
+
+    // 新側: 上に重ねて透明から不透明へフェードイン
+    next.style.transition = 'none'
+    next.style.opacity = '0'
+    next.style.zIndex = '2'
     next.currentTime = 0
     void next.play().catch(() => undefined)
-    setActiveIndex(1 - index)
-    // フェード完了後に旧側を止めて次のスイッチに備える
-    setTimeout(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        next.style.transition = `opacity ${fadeSeconds}s linear`
+        next.style.opacity = '1'
+      })
+    })
+
+    // フェード完了後に旧側を止める
+    window.setTimeout(() => {
       current.pause()
       switching.current = false
-    }, fadeSeconds * 1000 + 100)
+    }, fadeSeconds * 1000 + 150)
   }
 
   const handleEnded = (index: number) => {
     // クロスディゾルブ対象外（短尺）の動画はここで頭出しループ
-    if (index !== activeIndex) return
+    if (index !== activeIndex.current) return
     const video = refOf(index).current
     if (!video) return
     video.currentTime = 0
@@ -62,7 +91,8 @@ function CrossfadeLoopVideo({ src, fadeSeconds = VIDEO_CROSSFADE_SECONDS }: { sr
   }
 
   return (
-    <div className="relative h-full w-full">
+    // isolate: 動画の z-index をこのコンテナ内に閉じ込める（本文・コントロールより上に出さない）
+    <div className="isolate relative h-full w-full">
       {[0, 1].map((index) => (
         <video
           key={index}
@@ -73,8 +103,8 @@ function CrossfadeLoopVideo({ src, fadeSeconds = VIDEO_CROSSFADE_SECONDS }: { sr
           preload="auto"
           onTimeUpdate={() => handleTimeUpdate(index)}
           onEnded={() => handleEnded(index)}
-          className="absolute inset-0 h-full w-full object-cover transition-opacity ease-linear"
-          style={{ opacity: activeIndex === index ? 1 : 0, transitionDuration: `${fadeSeconds}s` }}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={index === 0 ? { opacity: 1, zIndex: 2 } : { opacity: 0, zIndex: 1 }}
         />
       ))}
     </div>
@@ -258,11 +288,24 @@ function StoryPlayer({
   const [paused, setPaused] = useState(false)
   const [finished, setFinished] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  const toggleFullscreen = useCallback(async () => {
+    setIsFullscreen(await window.storyFlow.toggleFullScreen())
+  }, [])
+
+  // プレイヤー終了時は必ず全画面を解除する
+  useEffect(() => {
+    return () => {
+      void window.storyFlow.setFullScreen(false)
+    }
+  }, [])
   const [visibleChars, setVisibleChars] = useState(0)
   const textRef = useRef<HTMLDivElement>(null)
 
   const scene = scenes[index]
   const isStreaming = uiSettings.theaterTextStreaming
+  const streamMsPerChar = uiSettings.theaterTextStreamMsPerChar
 
   // 本文ストリーミング: シーン切替でリセットし、1 文字ずつ増やす（一時停止で止まる）
   useEffect(() => {
@@ -301,9 +344,9 @@ function StoryPlayer({
     if (visibleChars >= scene.prose.length) return
     const timer = setInterval(() => {
       setVisibleChars((prev) => Math.min(prev + 1, scene.prose.length))
-    }, STREAM_INTERVAL_MS)
+    }, streamMsPerChar)
     return () => clearInterval(timer)
-  }, [isStreaming, paused, finished, scene, visibleChars >= (scene?.prose.length ?? 0)])
+  }, [isStreaming, paused, finished, scene, streamMsPerChar, visibleChars >= (scene?.prose.length ?? 0)])
 
   const goTo = useCallback(
     (next: number) => {
@@ -319,26 +362,35 @@ function StoryPlayer({
     [scenes.length]
   )
 
-  // オート送り
+  // オート送り（ストリーミングが遅い設定でも文字送りが終わる前に切り替わらないようにする）
   useEffect(() => {
     if (paused || finished || !scene) return
-    const timer = setTimeout(() => goTo(index + 1), sceneDurationMs(scene.prose))
+    const streamingMs = isStreaming ? scene.prose.length * streamMsPerChar + 3_000 : 0
+    const duration = Math.max(sceneDurationMs(scene.prose), streamingMs)
+    const timer = setTimeout(() => goTo(index + 1), duration)
     return () => clearTimeout(timer)
-  }, [index, paused, finished, scene, goTo])
+  }, [index, paused, finished, scene, goTo, isStreaming, streamMsPerChar])
 
-  // キーボード操作
+  // キーボード操作（Esc は 全画面解除 → もう一度で一覧へ の 2 段階）
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onExit()
-      else if (event.key === ' ') {
+      if (event.key === 'Escape') {
+        if (isFullscreen) {
+          void window.storyFlow.setFullScreen(false)
+          setIsFullscreen(false)
+        } else {
+          onExit()
+        }
+      } else if (event.key === ' ') {
         event.preventDefault()
         setPaused((prev) => !prev)
       } else if (event.key === 'ArrowRight') goTo(index + 1)
       else if (event.key === 'ArrowLeft') goTo(index - 1)
+      else if (event.key === 'f' || event.key === 'F') void toggleFullscreen()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [index, goTo, onExit])
+  }, [index, goTo, onExit, isFullscreen, toggleFullscreen])
 
   // マウスが止まったらコントロールを隠す
   useEffect(() => {
@@ -348,11 +400,13 @@ function StoryPlayer({
   }, [controlsVisible, index])
 
   return (
-    <div
-      className="relative h-full overflow-hidden bg-black"
-      onMouseMove={() => setControlsVisible(true)}
-      onClick={() => setPaused((prev) => !prev)}
-    >
+    <div className="flex h-full items-center justify-center overflow-hidden bg-black">
+      <div
+        className="relative overflow-hidden bg-black"
+        style={{ width: `${uiSettings.theaterStageScale}%`, height: `${uiSettings.theaterStageScale}%` }}
+        onMouseMove={() => setControlsVisible(true)}
+        onClick={() => setPaused((prev) => !prev)}
+      >
       {/* シーンレイヤー（クロスフェード） */}
       {scenes.map((item, i) => {
         const card = cards.get(item.card_id)
@@ -397,7 +451,10 @@ function StoryPlayer({
       {!finished && scene && (
         <div key={scene.id} className="absolute inset-x-0 bottom-0 px-10 pb-14 pt-6">
           <div ref={textRef} className="no-scrollbar mx-auto max-h-[38vh] max-w-2xl overflow-y-auto">
-            <p className="whitespace-pre-wrap text-[16px] leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
+            <p
+              className="whitespace-pre-wrap leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]"
+              style={{ fontSize: `${uiSettings.theaterFontSizePx}px` }}
+            >
               {isStreaming ? scene.prose.slice(0, visibleChars) : scene.prose}
             </p>
           </div>
@@ -444,13 +501,23 @@ function StoryPlayer({
           {index + 1} / {scenes.length}
           {paused && !finished && ' ・ 一時停止中'}
         </span>
-        <button
-          onClick={onExit}
-          aria-label="終了"
-          className="rounded bg-black/40 px-2.5 py-1 text-[14px] text-white/80 hover:bg-black/60"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => void toggleFullscreen()}
+            aria-label={isFullscreen ? '全画面を解除' : '全画面'}
+            title={isFullscreen ? '全画面を解除（F / Esc）' : '全画面（F）'}
+            className="rounded bg-black/40 px-2.5 py-1 text-[14px] text-white/80 hover:bg-black/60"
+          >
+            ⛶
+          </button>
+          <button
+            onClick={onExit}
+            aria-label="終了"
+            className="rounded bg-black/40 px-2.5 py-1 text-[14px] text-white/80 hover:bg-black/60"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       <div
@@ -493,6 +560,7 @@ function StoryPlayer({
             />
           ))}
         </div>
+      </div>
       </div>
     </div>
   )

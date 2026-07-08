@@ -38,6 +38,91 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               </span>
             </span>
           </label>
+          <div
+            className={`rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 ${
+              settings.theaterTextStreaming ? '' : 'opacity-50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[13px]">文字送りの速さ</span>
+              <span className="font-mono text-[12px] text-[var(--text-dim)]">
+                {settings.theaterTextStreamMsPerChar} ms/字
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="range"
+                min={10}
+                max={150}
+                step={5}
+                value={settings.theaterTextStreamMsPerChar}
+                disabled={!settings.theaterTextStreaming}
+                onChange={(event) => updateSettings({ theaterTextStreamMsPerChar: Number(event.target.value) })}
+                className="h-6 min-w-0 flex-1 accent-[var(--accent)]"
+              />
+              <button
+                onClick={() => updateSettings({ theaterTextStreamMsPerChar: 45 })}
+                disabled={!settings.theaterTextStreaming || settings.theaterTextStreamMsPerChar === 45}
+                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-0.5 text-[11px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+              >
+                リセット
+              </button>
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--text-faint)]">
+              小さいほど速い。文字送りが終わるまでシーンは送られません
+            </div>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px]">本文のフォントサイズ</span>
+              <span className="font-mono text-[12px] text-[var(--text-dim)]">{settings.theaterFontSizePx} px</span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="range"
+                min={12}
+                max={32}
+                step={1}
+                value={settings.theaterFontSizePx}
+                onChange={(event) => updateSettings({ theaterFontSizePx: Number(event.target.value) })}
+                className="h-6 min-w-0 flex-1 accent-[var(--accent)]"
+              />
+              <button
+                onClick={() => updateSettings({ theaterFontSizePx: 16 })}
+                disabled={settings.theaterFontSizePx === 16}
+                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-0.5 text-[11px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+              >
+                リセット
+              </button>
+            </div>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px]">再生ステージのサイズ</span>
+              <span className="font-mono text-[12px] text-[var(--text-dim)]">{settings.theaterStageScale}%</span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="range"
+                min={70}
+                max={100}
+                step={5}
+                value={settings.theaterStageScale}
+                onChange={(event) => updateSettings({ theaterStageScale: Number(event.target.value) })}
+                className="h-6 min-w-0 flex-1 accent-[var(--accent)]"
+              />
+              <button
+                onClick={() => updateSettings({ theaterStageScale: 100 })}
+                disabled={settings.theaterStageScale === 100}
+                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-0.5 text-[11px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+              >
+                リセット
+              </button>
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--text-faint)]">
+              100% 未満では黒背景の中央に額縁表示。没入したいときは再生中の ⛶（全画面）へ
+            </div>
+          </div>
           <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
             <input
               type="checkbox"
