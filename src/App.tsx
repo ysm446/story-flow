@@ -165,7 +165,14 @@ function AppShell() {
 
       <header className="relative flex h-12 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-sidebar)] px-4">
         <div className="flex items-center gap-4">
-          <span className="text-[15px] font-semibold tracking-wide">Story Flow</span>
+          <button
+            onClick={() => setIsLibraryPickerOpen(true)}
+            title={libraryRoot ? `ライブラリ: ${libraryRoot}（クリックで切り替え）` : 'ライブラリを開く'}
+            className="flex max-w-[220px] items-center gap-1.5 rounded border border-[var(--border-strong)] px-2.5 py-1.5 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+          >
+            <IconFolder size={13} />
+            <span className="truncate">{libraryName ?? 'ライブラリを開く'}</span>
+          </button>
 
           <nav className="flex items-center gap-1">
             {PHASES.map(({ id, label }) => (
@@ -199,14 +206,6 @@ function AppShell() {
         </div>
 
         <div className="ml-auto flex items-center gap-3">
-          <button
-            onClick={() => setIsLibraryPickerOpen(true)}
-            title={libraryRoot ? `ライブラリ: ${libraryRoot}（クリックで切り替え）` : 'ライブラリを開く'}
-            className="flex max-w-[220px] items-center gap-1.5 rounded border border-[var(--border-strong)] px-2.5 py-1.5 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
-          >
-            <IconFolder size={13} />
-            <span className="truncate">{libraryName ?? 'ライブラリを開く'}</span>
-          </button>
           <button
             onClick={() => setRightPanel((panel) => (panel === 'settings' ? null : 'settings'))}
             aria-label="設定"
