@@ -5,6 +5,82 @@ import { useUiSettings } from '../../store/settings'
 // 本文ストリーミング（タイプライター演出）の 1 文字あたりの間隔
 const STREAM_INTERVAL_MS = 45
 
+// 動画ループのクロスディゾルブ時間（秒）
+const VIDEO_CROSSFADE_SECONDS = 1.0
+
+/**
+ * ループの継ぎ目をクロスディゾルブで繋ぐ動画プレイヤー。
+ * 同じ動画を 2 枚重ね、終端 fadeSeconds 手前でもう 1 枚を頭から再生開始し、
+ * opacity のフェードで重ねる。フェードの 2 倍より短い動画は通常ループにフォールバック。
+ */
+function CrossfadeLoopVideo({ src, fadeSeconds = VIDEO_CROSSFADE_SECONDS }: { src: string; fadeSeconds?: number }) {
+  const videoARef = useRef<HTMLVideoElement>(null)
+  const videoBRef = useRef<HTMLVideoElement>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const switching = useRef(false)
+
+  const refOf = (index: number) => (index === 0 ? videoARef : videoBRef)
+
+  useEffect(() => {
+    switching.current = false
+    setActiveIndex(0)
+    const video = videoARef.current
+    if (video) {
+      video.currentTime = 0
+      void video.play().catch(() => undefined)
+    }
+  }, [src])
+
+  const handleTimeUpdate = (index: number) => {
+    if (index !== activeIndex || switching.current) return
+    const current = refOf(index).current
+    const next = refOf(1 - index).current
+    if (!current || !next) return
+
+    const { duration, currentTime } = current
+    if (!Number.isFinite(duration) || duration <= fadeSeconds * 2) return // 短尺は onEnded の通常ループ
+    if (duration - currentTime > fadeSeconds) return
+
+    switching.current = true
+    next.currentTime = 0
+    void next.play().catch(() => undefined)
+    setActiveIndex(1 - index)
+    // フェード完了後に旧側を止めて次のスイッチに備える
+    setTimeout(() => {
+      current.pause()
+      switching.current = false
+    }, fadeSeconds * 1000 + 100)
+  }
+
+  const handleEnded = (index: number) => {
+    // クロスディゾルブ対象外（短尺）の動画はここで頭出しループ
+    if (index !== activeIndex) return
+    const video = refOf(index).current
+    if (!video) return
+    video.currentTime = 0
+    void video.play().catch(() => undefined)
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      {[0, 1].map((index) => (
+        <video
+          key={index}
+          ref={refOf(index)}
+          src={src}
+          muted
+          playsInline
+          preload="auto"
+          onTimeUpdate={() => handleTimeUpdate(index)}
+          onEnded={() => handleEnded(index)}
+          className="absolute inset-0 h-full w-full object-cover transition-opacity ease-linear"
+          style={{ opacity: activeIndex === index ? 1 : 0, transitionDuration: `${fadeSeconds}s` }}
+        />
+      ))}
+    </div>
+  )
+}
+
 const TONE_LABELS: Record<string, string> = {
   happy: 'ハッピー',
   bad: 'バッド',
@@ -285,7 +361,13 @@ function StoryPlayer({
           <div key={item.id} className={`theater-layer ${isActive ? 'is-active' : ''}`}>
             {card?.media_path ? (
               card.media_type === 'video' ? (
-                isActive && (
+                isActive &&
+                (uiSettings.theaterVideoLoopCrossfade ? (
+                  <CrossfadeLoopVideo
+                    src={cardFileUrl(card.id, false)}
+                    fadeSeconds={uiSettings.theaterVideoCrossfadeSeconds}
+                  />
+                ) : (
                   <video
                     src={cardFileUrl(card.id, false)}
                     autoPlay
@@ -294,7 +376,7 @@ function StoryPlayer({
                     playsInline
                     className="h-full w-full object-cover"
                   />
-                )
+                ))
               ) : (
                 <img
                   src={cardFileUrl(card.id, false)}

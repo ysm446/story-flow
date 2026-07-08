@@ -7,10 +7,16 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 export interface UiSettings {
   /** Theater: 本文を 1 文字ずつストリーミング表示する（タイプライター演出） */
   theaterTextStreaming: boolean
+  /** Theater: 動画ループの継ぎ目をクロスディゾルブで繋ぐ */
+  theaterVideoLoopCrossfade: boolean
+  /** Theater: クロスディゾルブの長さ（秒） */
+  theaterVideoCrossfadeSeconds: number
 }
 
 const DEFAULT_SETTINGS: UiSettings = {
-  theaterTextStreaming: true
+  theaterTextStreaming: true,
+  theaterVideoLoopCrossfade: true,
+  theaterVideoCrossfadeSeconds: 1.0
 }
 
 const STORAGE_KEY = 'story-flow:ui-settings'
