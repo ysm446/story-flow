@@ -46,15 +46,6 @@ const STATUS_LABELS: Record<SceneStatus, string | null> = {
 
 function SceneNode({ data }: NodeProps) {
   const { index, scene, isRunning, hasTake, onRegenerate } = data as unknown as SceneNodeData
-  const proseRef = useRef<HTMLDivElement>(null)
-
-  // ストリーミング中は最新の行に追従
-  useEffect(() => {
-    if (scene.status === 'streaming' && proseRef.current) {
-      proseRef.current.scrollTop = proseRef.current.scrollHeight
-    }
-  }, [scene.prose, scene.status])
-
   const statusLabel = STATUS_LABELS[scene.status]
 
   return (
@@ -86,7 +77,8 @@ function SceneNode({ data }: NodeProps) {
           </span>
         )}
       </div>
-      <div ref={proseRef} className="nowheel h-[150px] overflow-y-auto px-2.5 py-2">
+      {/* 文章の長さに合わせてノードが縦に伸びる（スクロールしない） */}
+      <div className="min-h-[48px] px-2.5 py-2">
         {scene.prose ? (
           <p className="whitespace-pre-wrap text-[11px] leading-[1.7] text-[var(--text)]">
             {scene.prose}

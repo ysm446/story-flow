@@ -6,7 +6,8 @@ import type {
   LlamaInstallProgress,
   LlamaRelease,
   LlamaReleaseVariant,
-  LlamaServerStatus
+  LlamaServerStatus,
+  SystemResources
 } from '../main/types'
 
 export interface StoryFlowBridge {
@@ -32,6 +33,7 @@ export interface StoryFlowBridge {
   >
   cancelLlamaInstall(): Promise<{ ok: true }>
   onLlamaInstallProgress(callback: (payload: LlamaInstallProgress) => void): () => void
+  onSystemResources(callback: (payload: SystemResources) => void): () => void
 }
 
 declare global {

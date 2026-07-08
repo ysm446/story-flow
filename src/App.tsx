@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AppSettings, BackendStatus, EmbeddingStatus, LlamaServerStatus } from '../electron/main/types'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SetupPanel } from './components/SetupPanel'
+import { StatusBar } from './components/StatusBar'
 import { api, configureApi } from './lib/api'
 import { ComposePhase } from './phases/compose/ComposePhase'
 import { GeneratePhase } from './phases/generate/GeneratePhase'
@@ -175,6 +176,8 @@ function AppShell() {
         )}
         {rightPanel === 'settings' && <SettingsPanel onClose={() => setRightPanel(null)} />}
       </div>
+
+      <StatusBar backendHealthy={backendHealthy} modelLabel={modelLabel} />
     </div>
   )
 }

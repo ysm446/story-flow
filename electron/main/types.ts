@@ -90,6 +90,15 @@ export interface EmbeddingStatus {
   healthy: boolean
 }
 
+export interface SystemResources {
+  cpuUsage: number
+  ramUsed: number
+  ramTotal: number
+  gpuUsage: number | null
+  vramUsed: number | null
+  vramTotal: number | null
+}
+
 export interface BootstrapPayload {
   backend: BackendStatus
   settings: AppSettings

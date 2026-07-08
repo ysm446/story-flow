@@ -23,5 +23,6 @@ contextBridge.exposeInMainWorld('storyFlow', {
   fetchLlamaReleases: () => ipcRenderer.invoke('llama:releases'),
   installLlamaServer: (variant: unknown) => ipcRenderer.invoke('llama:install', variant),
   cancelLlamaInstall: () => ipcRenderer.invoke('llama:install-cancel'),
-  onLlamaInstallProgress: (callback: (payload: unknown) => void) => subscribe('llama:install-progress', callback)
+  onLlamaInstallProgress: (callback: (payload: unknown) => void) => subscribe('llama:install-progress', callback),
+  onSystemResources: (callback: (payload: unknown) => void) => subscribe('system:resources', callback)
 })

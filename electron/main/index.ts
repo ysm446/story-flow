@@ -5,12 +5,14 @@ import { BackendManager } from './backend'
 import { EmbeddingServerManager } from './embeddingServer'
 import { fetchLlamaReleases, installLlamaVariant } from './llamaInstaller'
 import { LlamaServerManager } from './llamaServer'
+import { startSystemResourcePolling } from './systemResources'
 import type { BootstrapPayload, LlamaInstallProgress, LlamaReleaseVariant } from './types'
 
 let llamaServer: LlamaServerManager | null = null
 let embeddingServer: EmbeddingServerManager | null = null
 let backend: BackendManager | null = null
 let llamaInstallController: AbortController | null = null
+let stopResourcePolling: (() => void) | null = null
 
 function getLlamaServer(): LlamaServerManager {
   if (!llamaServer) throw new Error('Llama server manager is not initialized yet.')
@@ -81,6 +83,7 @@ app.whenReady().then(async () => {
   backend = new BackendManager(rootDir, { STORY_FLOW_EMBEDDING_URL: embeddingServer.baseUrl })
   registerIpc()
   createWindow()
+  stopResourcePolling = startSystemResourcePolling()
 
   // バックエンド・埋め込みサーバは起動を待たずに立ち上げ始める
   void backend.ensureRunning().catch((error) => {
@@ -94,6 +97,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', async () => {
+  stopResourcePolling?.()
   if (llamaServer) await llamaServer.stop()
   if (embeddingServer) await embeddingServer.stop()
   if (backend) await backend.stop()

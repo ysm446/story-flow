@@ -19,6 +19,8 @@ export interface UiSettings {
   theaterVideoLoopCrossfade: boolean
   /** Theater: クロスディゾルブの長さ（秒） */
   theaterVideoCrossfadeSeconds: number
+  /** ステータスバー: システムリソース表示 */
+  statusMonitorVisible: boolean
 }
 
 const DEFAULT_SETTINGS: UiSettings = {
@@ -28,7 +30,8 @@ const DEFAULT_SETTINGS: UiSettings = {
   theaterFontSizePx: 16,
   theaterStageScale: 100,
   theaterVideoLoopCrossfade: true,
-  theaterVideoCrossfadeSeconds: 1.0
+  theaterVideoCrossfadeSeconds: 1.0,
+  statusMonitorVisible: true
 }
 
 const STORAGE_KEY = 'story-flow:ui-settings'
