@@ -16,7 +16,7 @@ import {
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { IconFilm, IconPencil } from '../../components/icons'
+import { IconFile, IconFilm, IconMore, IconPencil, IconPlus } from '../../components/icons'
 import {
   api,
   cardFileUrl,
@@ -256,6 +256,7 @@ function ComposeInner() {
   const [promptConfig, setPromptConfig] = useState<PromptConfig | null>(null)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
   const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null)
+  const [wsMenu, setWsMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null)
   const hydrated = useRef(false)
   const reactFlow = useReactFlow()
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -326,6 +327,16 @@ function ComposeInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges])
 
+  // 「⋯」メニューは Escape で閉じる
+  useEffect(() => {
+    if (!wsMenu) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setWsMenu(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [wsMenu])
+
   const buildUpdatePayload = useCallback(() => {
     return {
       graph: serializeGraph(nodes, edges),
@@ -388,28 +399,28 @@ function ComposeInner() {
     })
   }
 
-  const handleRename = () => {
-    if (!workspaceId) return
-    const current = workspaces.find((item) => item.id === workspaceId)
+  // ワークスペース行の「⋯」メニュー（lm-chat 風。名前変更 / 複製 / 削除）
+  const renameWorkspaceById = (ws: { id: string; name: string }) => {
+    setWsMenu(null)
     setNameDialog({
       title: '作品名を変更',
-      defaultValue: current?.name ?? '',
+      defaultValue: ws.name,
       onSubmit: (name) => {
-        void api.updateWorkspace(workspaceId, { name }).then(() => void refreshWorkspaces())
+        void api.updateWorkspace(ws.id, { name }).then(() => void refreshWorkspaces())
       }
     })
   }
 
-  const handleDuplicate = () => {
-    if (!workspaceId) return
-    const current = workspaces.find((item) => item.id === workspaceId)
+  const duplicateWorkspaceById = (ws: { id: string; name: string }) => {
+    setWsMenu(null)
     setNameDialog({
       title: '複製後の名前',
-      defaultValue: `${current?.name ?? '作品'} のコピー`,
+      defaultValue: `${ws.name} のコピー`,
       onSubmit: (name) => {
         void (async () => {
-          await api.updateWorkspace(workspaceId, buildUpdatePayload()) // 最新状態を複製できるよう保存
-          const duplicated = await api.duplicateWorkspace(workspaceId, name)
+          // アクティブな作品は最新の編集内容を保存してから複製する
+          if (ws.id === workspaceId) await api.updateWorkspace(workspaceId, buildUpdatePayload())
+          const duplicated = await api.duplicateWorkspace(ws.id, name)
           applyWorkspace(duplicated, cardById)
           void refreshWorkspaces()
         })()
@@ -417,21 +428,23 @@ function ComposeInner() {
     })
   }
 
-  const handleDelete = async () => {
-    if (!workspaceId) return
-    const current = workspaces.find((item) => item.id === workspaceId)
-    if (!window.confirm(`作品「${current?.name ?? ''}」を削除しますか？（生成済みの物語は残ります）`)) return
-    await api.deleteWorkspace(workspaceId)
-    hydrated.current = false
+  const deleteWorkspaceById = async (ws: { id: string; name: string }) => {
+    setWsMenu(null)
+    if (!window.confirm(`作品「${ws.name}」を削除しますか？（生成済みの物語は残ります）`)) return
+    await api.deleteWorkspace(ws.id)
     const rest = (await api.listWorkspaces()).workspaces
-    if (rest.length === 0) {
-      const created = await api.createWorkspace('無題の作品')
-      setWorkspaces([{ ...created, story_count: 0 }])
-      applyWorkspace(created, cardById)
-    } else {
-      setWorkspaces(rest)
-      const workspace = await api.getWorkspace(rest[0].id)
-      applyWorkspace(workspace, cardById)
+    setWorkspaces(rest)
+    // 表示中の作品を消したときだけ別の作品へ切り替える（無ければ新規作成）
+    if (ws.id === workspaceId) {
+      hydrated.current = false
+      if (rest.length === 0) {
+        const created = await api.createWorkspace('無題の作品')
+        setWorkspaces([{ ...created, story_count: 0 }])
+        applyWorkspace(created, cardById)
+      } else {
+        const workspace = await api.getWorkspace(rest[0].id)
+        applyWorkspace(workspace, cardById)
+      }
     }
   }
 
@@ -509,118 +522,172 @@ function ComposeInner() {
     <div className="relative flex h-full">
       {nameDialog && <NameDialog state={nameDialog} onClose={() => setNameDialog(null)} />}
 
-      {/* 左: ワークスペース + パレット */}
+      {/* 左: 作品（ワークスペース）一覧 */}
       <aside className="flex w-[240px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)]">
-        <div className="space-y-2 border-b border-[var(--border)] p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-[var(--text-dim)]">作品（ワークスペース）</span>
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
+          <span className="text-[13px] font-semibold text-[var(--text-dim)]">作品</span>
+          <div className="flex items-center gap-2">
             <span
               className={`text-[11px] ${saveState === 'error' ? 'text-[var(--danger)]' : 'text-[var(--text-faint)]'}`}
             >
               {saveState === 'saving' ? '保存中…' : saveState === 'error' ? '保存失敗' : '保存済み'}
             </span>
-          </div>
-          <select
-            value={workspaceId ?? ''}
-            onChange={(event) => void switchWorkspace(event.target.value)}
-            className={inputClass}
-          >
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-                {workspace.story_count > 0 ? `（${workspace.story_count} 話）` : ''}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-1">
-            {[
-              { label: '＋ 新規', onClick: handleCreate },
-              { label: '名前', onClick: handleRename },
-              { label: '複製', onClick: handleDuplicate },
-              { label: '削除', onClick: handleDelete }
-            ].map(({ label, onClick }) => (
-              <button
-                key={label}
-                onClick={() => void onClick()}
-                className="flex-1 rounded border border-[var(--border-strong)] px-1 py-1 text-[11px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)]"
-              >
-                {label}
-              </button>
-            ))}
+            <button
+              onClick={handleCreate}
+              aria-label="新しい作品"
+              title="新しい作品"
+              className="flex items-center rounded border border-[var(--border-strong)] p-1 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+            >
+              <IconPlus size={14} />
+            </button>
           </div>
         </div>
 
-        <div className="border-b border-[var(--border)] px-3 py-2 text-[13px] font-semibold text-[var(--text-dim)]">
-          カード（クリックで配置）
-        </div>
-        <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
-          {palette.length === 0 && (
-            <div className="px-1 py-2 text-[12px] text-[var(--text-faint)]">
-              {allCards.length === 0 ? 'Vault でカードを登録してください。' : 'すべて配置済みです。'}
-            </div>
-          )}
-          {palette.map((card) => (
-            <button
-              key={card.id}
-              onClick={() => addCardNode(card)}
-              className="flex w-full items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-card)] p-1.5 text-left hover:border-[var(--border-strong)]"
+        <div className="flex-1 space-y-1 overflow-y-auto p-2">
+          {workspaces.map((workspace) => (
+            <div
+              key={workspace.id}
+              className={`group flex items-center gap-1 rounded-md border px-2 py-1.5 ${
+                workspace.id === workspaceId
+                  ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
+                  : 'border-transparent hover:border-[var(--border-strong)] hover:bg-[var(--bg-elevated)]'
+              }`}
             >
-              <span className="relative h-10 w-14 shrink-0 overflow-hidden rounded bg-[var(--bg-canvas)]">
-                {card.media_path ? (
-                  <>
-                    <img
-                      src={`${cardFileUrl(card.id, true)}&v=${encodeURIComponent(card.updated_at)}`}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                      onError={(event) => {
-                        event.currentTarget.style.visibility = 'hidden'
-                      }}
-                    />
-                    {card.media_type === 'video' && (
-                      <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 p-0.5 text-white/90">
-                        <IconFilm size={9} />
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center text-[14px] opacity-30">📄</span>
+              <button
+                onClick={() => void switchWorkspace(workspace.id)}
+                className="min-w-0 flex-1 text-left"
+                title={workspace.name}
+              >
+                <span className="block truncate text-[13px]">{workspace.name}</span>
+                {workspace.story_count > 0 && (
+                  <span className="block text-[10px] text-[var(--text-faint)]">{workspace.story_count} 話</span>
                 )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px]">{card.title}</span>
-                <span className="block truncate text-[10px] text-[var(--text-faint)]">{card.brief}</span>
-              </span>
-            </button>
+              </button>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation()
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  setWsMenu({ id: workspace.id, name: workspace.name, x: rect.right, y: rect.bottom + 4 })
+                }}
+                aria-label="メニュー"
+                title="メニュー"
+                className={`flex shrink-0 items-center rounded p-1 text-[var(--text-faint)] hover:bg-[var(--bg-card)] hover:text-[var(--text)] ${
+                  wsMenu?.id === workspace.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              >
+                <IconMore size={15} />
+              </button>
+            </div>
           ))}
         </div>
       </aside>
 
-      {/* キャンバス */}
-      <div ref={canvasRef} className="relative min-w-0 flex-1">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          deleteKeyCode={['Delete', 'Backspace']}
-          minZoom={0.2}
-          maxZoom={1.5}
-          fitView
-          proOptions={{ hideAttribution: true }}
-          className="bg-[var(--bg-canvas)]"
-        >
-          <Background gap={20} />
-          <MiniMap pannable zoomable className="!bg-[var(--bg-sidebar)]" />
-        </ReactFlow>
+      {/* 中央: ノードネットワーク + 下部アセットエリア */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div ref={canvasRef} className="relative min-h-0 flex-1">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            deleteKeyCode={['Delete', 'Backspace']}
+            minZoom={0.2}
+            maxZoom={1.5}
+            fitView
+            proOptions={{ hideAttribution: true }}
+            className="bg-[var(--bg-canvas)]"
+          >
+            <Background gap={20} />
+            <MiniMap pannable zoomable className="!bg-[var(--bg-sidebar)]" />
+          </ReactFlow>
 
-        {/* ステータス */}
-        <div className="absolute left-3 top-3 rounded-md border border-[var(--border)] bg-[var(--bg-sidebar)]/95 px-3 py-2 text-[12px] text-[var(--text-dim)]">
-          {chain.orderedIds ? `${chain.orderedIds.length} シーン（左から順に清書）` : chain.reason}
+          {/* ステータス */}
+          <div className="absolute left-3 top-3 rounded-md border border-[var(--border)] bg-[var(--bg-sidebar)]/95 px-3 py-2 text-[12px] text-[var(--text-dim)]">
+            {chain.orderedIds ? `${chain.orderedIds.length} シーン（左から順に清書）` : chain.reason}
+          </div>
+        </div>
+
+        {/* アセットエリア: 未配置カードをクリックで配置 */}
+        <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-sidebar)]">
+          <div className="px-3 pt-2 text-[12px] font-semibold text-[var(--text-dim)]">
+            アセット（クリックでキャンバスに配置）
+          </div>
+          <div className="flex gap-2 overflow-x-auto px-3 pb-3 pt-2">
+            {palette.length === 0 ? (
+              <div className="py-4 text-[12px] text-[var(--text-faint)]">
+                {allCards.length === 0 ? 'Vault でカードを登録してください。' : 'すべて配置済みです。'}
+              </div>
+            ) : (
+              palette.map((card) => (
+                <button
+                  key={card.id}
+                  onClick={() => addCardNode(card)}
+                  title={card.title}
+                  className="flex w-28 shrink-0 flex-col overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-left hover:border-[var(--border-strong)]"
+                >
+                  <span className="relative block h-16 w-full bg-[var(--bg-canvas)]">
+                    {card.media_path ? (
+                      <>
+                        <img
+                          src={`${cardFileUrl(card.id, true)}&v=${encodeURIComponent(card.updated_at)}`}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                          onError={(event) => {
+                            event.currentTarget.style.visibility = 'hidden'
+                          }}
+                        />
+                        {card.media_type === 'video' && (
+                          <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 p-0.5 text-white/90">
+                            <IconFilm size={9} />
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-[var(--text-faint)] opacity-40">
+                        <IconFile size={18} />
+                      </span>
+                    )}
+                  </span>
+                  <span className="truncate px-1.5 py-1 text-[11px]">{card.title}</span>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ワークスペースの「⋯」メニュー */}
+      {wsMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setWsMenu(null)} />
+          <div
+            className="fixed z-50 min-w-[140px] -translate-x-full rounded-md border border-[var(--border-strong)] bg-[var(--bg-sidebar)] py-1 shadow-xl"
+            style={{ left: wsMenu.x, top: wsMenu.y }}
+          >
+            <button
+              onClick={() => renameWorkspaceById(wsMenu)}
+              className="block w-full px-3 py-1.5 text-left text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+            >
+              名前を変更
+            </button>
+            <button
+              onClick={() => duplicateWorkspaceById(wsMenu)}
+              className="block w-full px-3 py-1.5 text-left text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+            >
+              複製
+            </button>
+            <button
+              onClick={() => void deleteWorkspaceById(wsMenu)}
+              className="block w-full px-3 py-1.5 text-left text-[12px] text-[var(--danger)] hover:bg-[var(--bg-elevated)]"
+            >
+              削除
+            </button>
+          </div>
+        </>
+      )}
 
       {/* 生成設定 + 選択ノードのプロパティ */}
       <aside className="flex w-[280px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-sidebar)]">
