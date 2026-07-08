@@ -1,4 +1,4 @@
-import { useUiSettings } from '../store/settings'
+import { useUiSettings, type UiSettings } from '../store/settings'
 import { IconX } from './icons'
 import { PromptManager } from './PromptManager'
 
@@ -181,6 +181,45 @@ export function SettingsPanel({
             </div>
             <div className="mt-1 text-[11px] text-[var(--text-faint)]">
               100% 未満では黒背景の中央に額縁表示。没入したいときは再生中の ⛶（全画面）へ
+            </div>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px]">画面の縦横比</span>
+              <select
+                value={settings.theaterAspectRatio}
+                onChange={(event) =>
+                  updateSettings({ theaterAspectRatio: event.target.value as UiSettings['theaterAspectRatio'] })
+                }
+                className="rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1 text-[12px]"
+              >
+                <option value="auto">自動（ウィンドウに合わせる）</option>
+                <option value="16:9">16:9（ワイド）</option>
+                <option value="4:3">4:3</option>
+                <option value="3:2">3:2</option>
+                <option value="1:1">1:1（正方形）</option>
+              </select>
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--text-faint)]">
+              素材の比率に合わせると上下・左右の切れや余白がなくなります（例: 4:3 の素材は 4:3）
+            </div>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px]">メディアの合わせ方</span>
+              <select
+                value={settings.theaterFitMode}
+                onChange={(event) =>
+                  updateSettings({ theaterFitMode: event.target.value as UiSettings['theaterFitMode'] })
+                }
+                className="rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1 text-[12px]"
+              >
+                <option value="cover">埋める（画面いっぱい・はみ出しは切れる）</option>
+                <option value="contain">全体表示（切れない・余白が出る）</option>
+              </select>
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--text-faint)]">
+              比率の違う素材が混在するときは「全体表示」にすると切れません
             </div>
           </div>
           <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">

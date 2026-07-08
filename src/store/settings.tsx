@@ -15,6 +15,10 @@ export interface UiSettings {
   theaterFontSizePx: number
   /** Theater: 再生ステージのサイズ（画面に対する %。100 = 全面） */
   theaterStageScale: number
+  /** Theater: 再生ステージの縦横比（auto = ウィンドウに合わせる） */
+  theaterAspectRatio: 'auto' | '16:9' | '4:3' | '3:2' | '1:1'
+  /** Theater: メディアの合わせ方（cover = 埋める・切れる / contain = 全体表示・余白） */
+  theaterFitMode: 'cover' | 'contain'
   /** Theater: 動画ループの継ぎ目をクロスディゾルブで繋ぐ */
   theaterVideoLoopCrossfade: boolean
   /** Theater: クロスディゾルブの長さ（秒） */
@@ -29,6 +33,8 @@ const DEFAULT_SETTINGS: UiSettings = {
   theaterTextStreamMsPerChar: 45,
   theaterFontSizePx: 16,
   theaterStageScale: 100,
+  theaterAspectRatio: 'auto',
+  theaterFitMode: 'cover',
   theaterVideoLoopCrossfade: true,
   theaterVideoCrossfadeSeconds: 1.0,
   statusMonitorVisible: true

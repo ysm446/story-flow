@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   IconMaximize,
   IconPause,
@@ -23,7 +23,15 @@ const VIDEO_CROSSFADE_SECONDS = 1.0
  * 「下の動画は不透明のまま残し、上に重ねた新しい動画だけをフェードイン」する。
  * フェードの 2 倍より短い動画は通常ループにフォールバック。
  */
-function CrossfadeLoopVideo({ src, fadeSeconds = VIDEO_CROSSFADE_SECONDS }: { src: string; fadeSeconds?: number }) {
+function CrossfadeLoopVideo({
+  src,
+  fadeSeconds = VIDEO_CROSSFADE_SECONDS,
+  fitClass = 'object-cover'
+}: {
+  src: string
+  fadeSeconds?: number
+  fitClass?: string
+}) {
   const videoARef = useRef<HTMLVideoElement>(null)
   const videoBRef = useRef<HTMLVideoElement>(null)
   const activeIndex = useRef(0)
@@ -112,7 +120,7 @@ function CrossfadeLoopVideo({ src, fadeSeconds = VIDEO_CROSSFADE_SECONDS }: { sr
           preload="auto"
           onTimeUpdate={() => handleTimeUpdate(index)}
           onEnded={() => handleEnded(index)}
-          className="absolute inset-0 h-full w-full object-cover"
+          className={`absolute inset-0 h-full w-full ${fitClass}`}
           style={index === 0 ? { opacity: 1, zIndex: 2 } : { opacity: 0, zIndex: 1 }}
         />
       ))}
@@ -130,6 +138,15 @@ const TONE_LABELS: Record<string, string> = {
 // オート送り: 基本 4 秒 + 文字数 × 90ms（5〜30 秒にクランプ）
 function sceneDurationMs(prose: string): number {
   return Math.min(30_000, Math.max(5_000, 4_000 + prose.length * 90))
+}
+
+// 縦横比の設定値 → CSS aspect-ratio 値（auto は null = ウィンドウに合わせる）
+const ASPECT_RATIO_CSS: Record<string, string | null> = {
+  auto: null,
+  '16:9': '16 / 9',
+  '4:3': '4 / 3',
+  '3:2': '3 / 2',
+  '1:1': '1 / 1'
 }
 
 /**
@@ -409,11 +426,25 @@ function StoryPlayer({
     return () => clearTimeout(timer)
   }, [controlsVisible, index])
 
+  // ステージの形: 縦横比 auto はウィンドウ形（現状どおり）。比率指定時はその額縁を
+  // コンテナに収まる最大サイズ（× スケール）で中央に置く。object-fit で切れる/余白が決まる
+  const aspectCss = ASPECT_RATIO_CSS[uiSettings.theaterAspectRatio] ?? null
+  const stageStyle: CSSProperties =
+    aspectCss === null
+      ? { width: `${uiSettings.theaterStageScale}%`, height: `${uiSettings.theaterStageScale}%` }
+      : {
+          aspectRatio: aspectCss,
+          width: `${uiSettings.theaterStageScale}%`,
+          maxWidth: `${uiSettings.theaterStageScale}%`,
+          maxHeight: `${uiSettings.theaterStageScale}%`
+        }
+  const fitClass = uiSettings.theaterFitMode === 'contain' ? 'object-contain' : 'object-cover'
+
   return (
     <div className="flex h-full items-center justify-center overflow-hidden bg-black">
       <div
         className="relative overflow-hidden bg-black"
-        style={{ width: `${uiSettings.theaterStageScale}%`, height: `${uiSettings.theaterStageScale}%` }}
+        style={stageStyle}
         onMouseMove={() => setControlsVisible(true)}
         onClick={() => setPaused((prev) => !prev)}
       >
@@ -430,6 +461,7 @@ function StoryPlayer({
                   <CrossfadeLoopVideo
                     src={cardFileUrl(card.id, false)}
                     fadeSeconds={uiSettings.theaterVideoCrossfadeSeconds}
+                    fitClass={fitClass}
                   />
                 ) : (
                   <video
@@ -438,14 +470,14 @@ function StoryPlayer({
                     muted
                     loop
                     playsInline
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full ${fitClass}`}
                   />
                 ))
               ) : (
                 <img
                   src={cardFileUrl(card.id, false)}
                   alt=""
-                  className={`h-full w-full object-cover ${isActive ? `kenburns-${i % 4}` : ''}`}
+                  className={`h-full w-full ${fitClass} ${isActive ? `kenburns-${i % 4}` : ''}`}
                 />
               )
             ) : (

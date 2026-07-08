@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 07:40
+更新日時: 2026-07-09 08:10
 
 ## 現在地
 
@@ -281,6 +281,14 @@ Vault → Compose → Generate → Theater が一本つながった。
   （測定済みサイズ）が毎回失われ「未測定 → 一瞬 opacity:0」でちらついていた。
   Compose と同じ useNodesState / useEdgesState に変更し、シーン内容（ストリーミング）は
   既存ノードへ流し込む方式に（position と measured を引き継ぐ）。ドラッグは onNodesChange 任せ
+
+- 2026-07-09: **Theater の縦横比・合わせ方を設定可能に**（作者要望。4:3 素材が 16:9 の
+  ステージで上下トリミングされる問題）:
+  - 「画面の縦横比」（自動＝ウィンドウ / 16:9 / 4:3 / 3:2 / 1:1）。比率指定時はステージを
+    その額縁にしてコンテナ内最大サイズ（× stageScale）で中央配置（aspect-ratio + max-w/h）
+  - 「メディアの合わせ方」（cover=埋める・切れる / contain=全体表示・余白）。img/video/
+    CrossfadeLoopVideo すべてに適用。既定は現状維持（auto + cover）
+  - 素材が 4:3 なら「縦横比=4:3」で切れずにぴったり収まる。混在素材は contain で無切れ
 
 ## 未完了（plan.md の作業順序に従う）
 
