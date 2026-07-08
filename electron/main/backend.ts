@@ -14,10 +14,12 @@ export class BackendManager {
   private process: ChildProcessWithoutNullStreams | null = null
   private readonly rootDir: string
   private readonly port: number
+  private readonly extraEnv: Record<string, string>
 
-  constructor(rootDir: string) {
+  constructor(rootDir: string, extraEnv: Record<string, string> = {}) {
     this.rootDir = rootDir
     this.port = Number(process.env.STORY_FLOW_BACKEND_PORT) || DEFAULT_BACKEND_PORT
+    this.extraEnv = extraEnv
   }
 
   get baseUrl(): string {
@@ -56,7 +58,7 @@ export class BackendManager {
     this.process = spawn(
       this.pythonPath,
       ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(this.port)],
-      { cwd: this.rootDir, windowsHide: true }
+      { cwd: this.rootDir, windowsHide: true, env: { ...process.env, ...this.extraEnv } }
     )
     this.process.stdout.on('data', (data) => process.stdout.write(`[backend] ${data}`))
     this.process.stderr.on('data', (data) => process.stderr.write(`[backend] ${data}`))

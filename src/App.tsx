@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, BackendStatus, LlamaServerStatus } from '../electron/main/types'
+import type { AppSettings, BackendStatus, EmbeddingStatus, LlamaServerStatus } from '../electron/main/types'
 import { SetupPanel } from './components/SetupPanel'
 import { api, configureApi } from './lib/api'
 import { ComposePhase } from './phases/compose/ComposePhase'
@@ -27,6 +27,7 @@ function AppShell() {
   const { phase, setPhase } = useAppStore()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [llamaStatus, setLlamaStatus] = useState<LlamaServerStatus | null>(null)
+  const [embedding, setEmbedding] = useState<EmbeddingStatus | null>(null)
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
   const [backendHealthy, setBackendHealthy] = useState(false)
   const [isSetupOpen, setIsSetupOpen] = useState(false)
@@ -40,6 +41,7 @@ function AppShell() {
       setBackendStatus(payload.backend)
       setSettings(payload.settings)
       setLlamaStatus(payload.llamaStatus)
+      setEmbedding(payload.embedding)
       // llama-server 未インストールなら初回からセットアップを開く
       if (!payload.llamaStatus.installed) setIsSetupOpen(true)
     })
@@ -134,8 +136,10 @@ function AppShell() {
           <SetupPanel
             settings={settings}
             llamaStatus={llamaStatus}
+            embedding={embedding}
             onSettingsChange={setSettings}
             onLlamaStatusChange={setLlamaStatus}
+            onEmbeddingChange={setEmbedding}
             onClose={() => setIsSetupOpen(false)}
           />
         )}

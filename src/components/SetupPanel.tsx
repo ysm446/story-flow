@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type {
   AppSettings,
+  EmbeddingStatus,
   LlamaInstallProgress,
   LlamaRelease,
   LlamaReleaseVariant,
@@ -10,8 +11,10 @@ import type {
 interface SetupPanelProps {
   settings: AppSettings | null
   llamaStatus: LlamaServerStatus | null
+  embedding: EmbeddingStatus | null
   onSettingsChange: (settings: AppSettings) => void
   onLlamaStatusChange: (status: LlamaServerStatus) => void
+  onEmbeddingChange: (status: EmbeddingStatus) => void
   onClose: () => void
 }
 
@@ -21,7 +24,16 @@ function formatBytes(bytes: number): string {
   return `${Math.ceil(bytes / 1024)} KB`
 }
 
-export function SetupPanel({ settings, llamaStatus, onSettingsChange, onLlamaStatusChange, onClose }: SetupPanelProps) {
+export function SetupPanel({
+  settings,
+  llamaStatus,
+  embedding,
+  onSettingsChange,
+  onLlamaStatusChange,
+  onEmbeddingChange,
+  onClose
+}: SetupPanelProps) {
+  const [embeddingBusy, setEmbeddingBusy] = useState(false)
   const [releases, setReleases] = useState<LlamaRelease[]>([])
   const [selectedVariantKey, setSelectedVariantKey] = useState<string | null>(null)
   const [loadingReleases, setLoadingReleases] = useState(false)
@@ -261,6 +273,62 @@ export function SetupPanel({ settings, llamaStatus, onSettingsChange, onLlamaSta
               models/ に GGUF ファイルが見つかりません。
             </div>
           )}
+        </section>
+
+        {/* 埋め込みサーバ（Vault の検索・類似判定用） */}
+        <section>
+          <h3 className="mb-2 text-[13px] font-semibold text-[var(--text-dim)]">
+            埋め込みサーバ（Vault の検索用）
+          </h3>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[13px]">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  embedding?.healthy ? 'bg-[var(--ok)]' : 'bg-[var(--text-faint)]'
+                }`}
+              />
+              <span>{embedding?.healthy ? '起動中' : '停止中'}</span>
+            </div>
+            <div className="mt-1 break-all text-[12px] text-[var(--text-faint)]">
+              {embedding?.modelName ?? 'models/ に embedding 用 GGUF（例: Qwen3-Embedding-4B）が見つかりません'}
+            </div>
+            <div className="mt-2 flex gap-2">
+              {embedding?.healthy ? (
+                <button
+                  onClick={async () => {
+                    setEmbeddingBusy(true)
+                    try {
+                      onEmbeddingChange(await window.storyFlow.stopEmbedding())
+                    } finally {
+                      setEmbeddingBusy(false)
+                    }
+                  }}
+                  disabled={embeddingBusy}
+                  className="rounded border border-[var(--border-strong)] px-2 py-1 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+                >
+                  停止
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setEmbeddingBusy(true)
+                    setError(null)
+                    try {
+                      onEmbeddingChange(await window.storyFlow.ensureEmbedding())
+                    } catch (cause) {
+                      setError(cause instanceof Error ? cause.message : String(cause))
+                    } finally {
+                      setEmbeddingBusy(false)
+                    }
+                  }}
+                  disabled={embeddingBusy || !embedding?.serverInstalled || !embedding?.modelPath}
+                  className="rounded bg-[var(--accent)] px-2 py-1 text-[12px] text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {embeddingBusy ? '起動中…' : '起動'}
+                </button>
+              )}
+            </div>
+          </div>
         </section>
 
         {error && (

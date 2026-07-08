@@ -81,8 +81,18 @@ export interface BackendStatus {
   venvExists: boolean
 }
 
+export interface EmbeddingStatus {
+  baseUrl: string
+  serverInstalled: boolean
+  modelPath: string | null
+  modelName: string | null
+  running: boolean
+  healthy: boolean
+}
+
 export interface BootstrapPayload {
   backend: BackendStatus
   settings: AppSettings
   llamaStatus: LlamaServerStatus
+  embedding: EmbeddingStatus
 }

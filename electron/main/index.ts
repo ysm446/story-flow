@@ -2,17 +2,24 @@ import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { BackendManager } from './backend'
+import { EmbeddingServerManager } from './embeddingServer'
 import { fetchLlamaReleases, installLlamaVariant } from './llamaInstaller'
 import { LlamaServerManager } from './llamaServer'
 import type { BootstrapPayload, LlamaInstallProgress, LlamaReleaseVariant } from './types'
 
 let llamaServer: LlamaServerManager | null = null
+let embeddingServer: EmbeddingServerManager | null = null
 let backend: BackendManager | null = null
 let llamaInstallController: AbortController | null = null
 
 function getLlamaServer(): LlamaServerManager {
   if (!llamaServer) throw new Error('Llama server manager is not initialized yet.')
   return llamaServer
+}
+
+function getEmbeddingServer(): EmbeddingServerManager {
+  if (!embeddingServer) throw new Error('Embedding server manager is not initialized yet.')
+  return embeddingServer
 }
 
 function getBackend(): BackendManager {
@@ -65,17 +72,21 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const rootDir = resolveAppRoot()
   llamaServer = new LlamaServerManager()
-  backend = new BackendManager(rootDir)
+  embeddingServer = new EmbeddingServerManager(rootDir)
+  // 埋め込みサーバのポートを確定させてからバックエンドに URL を注入する
+  await embeddingServer.init()
+  backend = new BackendManager(rootDir, { STORY_FLOW_EMBEDDING_URL: embeddingServer.baseUrl })
   registerIpc()
   createWindow()
 
-  // バックエンドは起動を待たずに立ち上げ始める（renderer 側は /health をポーリング）
+  // バックエンド・埋め込みサーバは起動を待たずに立ち上げ始める
   void backend.ensureRunning().catch((error) => {
     console.error('[backend] failed to start:', error instanceof Error ? error.message : error)
   })
+  void embeddingServer.tryStart()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -84,24 +95,34 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', async () => {
   if (llamaServer) await llamaServer.stop()
+  if (embeddingServer) await embeddingServer.stop()
   if (backend) await backend.stop()
   if (process.platform !== 'darwin') app.quit()
 })
 
 function registerIpc(): void {
   const llama = getLlamaServer()
+  const embedding = getEmbeddingServer()
   const backendManager = getBackend()
 
   ipcMain.handle('bootstrap', async (): Promise<BootstrapPayload> => {
     return {
       backend: await backendManager.getStatus(),
       settings: await llama.getRuntimeSettings(),
-      llamaStatus: llama.getServerStatus()
+      llamaStatus: llama.getServerStatus(),
+      embedding: await embedding.getStatus()
     }
   })
 
   ipcMain.handle('backend:status', async () => backendManager.getStatus())
   ipcMain.handle('backend:ensure', async () => backendManager.ensureRunning())
+
+  ipcMain.handle('embedding:status', async () => embedding.getStatus())
+  ipcMain.handle('embedding:ensure', async () => embedding.ensureRunning())
+  ipcMain.handle('embedding:stop', async () => {
+    await embedding.stop()
+    return embedding.getStatus()
+  })
 
   ipcMain.handle('models:list', async () => llama.getRuntimeSettings())
   ipcMain.handle('models:select', async (_event, modelPath: string) => {

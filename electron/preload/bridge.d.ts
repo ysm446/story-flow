@@ -2,6 +2,7 @@ import type {
   AppSettings,
   BackendStatus,
   BootstrapPayload,
+  EmbeddingStatus,
   LlamaInstallProgress,
   LlamaRelease,
   LlamaReleaseVariant,
@@ -12,6 +13,9 @@ export interface StoryFlowBridge {
   bootstrap(): Promise<BootstrapPayload>
   getBackendStatus(): Promise<BackendStatus>
   ensureBackend(): Promise<BackendStatus>
+  getEmbeddingStatus(): Promise<EmbeddingStatus>
+  ensureEmbedding(): Promise<EmbeddingStatus>
+  stopEmbedding(): Promise<EmbeddingStatus>
   listModels(): Promise<AppSettings>
   selectModel(modelPath: string): Promise<{ settings: AppSettings }>
   ejectModel(): Promise<{ settings: AppSettings }>

@@ -286,7 +286,7 @@ export class LlamaServerManager {
   }
 }
 
-async function findAvailablePort(startPort: number, attempts = 20): Promise<number> {
+export async function findAvailablePort(startPort: number, attempts = 20): Promise<number> {
   for (let offset = 0; offset < attempts; offset += 1) {
     const candidate = startPort + offset
     if (await canListen(candidate)) {
@@ -453,7 +453,7 @@ function collectServerCandidates(rootDir: string): string[] {
   return candidates
 }
 
-function resolveLlamaServerPath(rootDir: string): string | null {
+export function resolveLlamaServerPath(rootDir: string): string | null {
   const candidates = collectServerCandidates(rootDir)
   if (candidates.length === 0) return null
   candidates.sort(compareServerCandidates)
@@ -498,7 +498,7 @@ function getServerCandidateScore(serverPath: string): { build: number; mtimeMs: 
   }
 }
 
-function walkFiles(dir: string): string[] {
+export function walkFiles(dir: string): string[] {
   const entries = readdirSync(dir, { withFileTypes: true })
   const files: string[] = []
   for (const entry of entries) {
@@ -512,7 +512,7 @@ function walkFiles(dir: string): string[] {
   return files
 }
 
-function resolveAppRoot(): string {
+export function resolveAppRoot(): string {
   const candidates = [
     process.cwd(),
     resolve(app.getAppPath(), '..', '..'),
