@@ -450,7 +450,7 @@ function StoryPlayer({
       {/* 本文（最大高を超える長文はスクロール。ストリーミング時は追従、オフ時はオート） */}
       {!finished && scene && (
         <div key={scene.id} className="absolute inset-x-0 bottom-0 px-10 pb-14 pt-6">
-          <div ref={textRef} className="no-scrollbar mx-auto max-h-[38vh] max-w-2xl overflow-y-auto">
+          <div ref={textRef} className="no-scrollbar mx-auto max-h-[25vh] max-w-2xl overflow-y-auto">
             <p
               className="whitespace-pre-wrap leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]"
               style={{ fontSize: `${uiSettings.theaterFontSizePx}px` }}

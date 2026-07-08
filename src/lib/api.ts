@@ -181,6 +181,7 @@ export interface StoryStateSnapshot {
 }
 
 export type GenerateEvent =
+  | { type: 'delta'; position: number; text: string }
   | {
       type: 'scene'
       position: number

@@ -49,6 +49,123 @@ def extract_json(text: str) -> dict:
     return parsed
 
 
+class _ProseStreamExtractor:
+    """ストリーミング中の LLM 出力（JSON）から "prose" 文字列の中身だけを逐次取り出す。
+
+    {"prose": "..." までを探し、以降は JSON 文字列のエスケープを解決しながら
+    閉じクォートまでの文字を返す。state 以降のフィールドは無視（最後に全文をパースする）。
+    """
+
+    def __init__(self) -> None:
+        self._phase = "search"  # search → in_string → done
+        self._search_buffer = ""
+        self._escaped = False
+        self._unicode_hex: str | None = None
+
+    def feed(self, chunk: str) -> str:
+        if self._phase == "done":
+            return ""
+        output: list[str] = []
+        remaining = chunk
+        if self._phase == "search":
+            self._search_buffer += chunk
+            match = re.search(r'"prose"\s*:\s*"', self._search_buffer)
+            if not match:
+                return ""
+            self._phase = "in_string"
+            remaining = self._search_buffer[match.end():]
+            self._search_buffer = ""
+        for char in remaining:
+            if self._phase != "in_string":
+                break
+            if self._unicode_hex is not None:
+                self._unicode_hex += char
+                if len(self._unicode_hex) == 4:
+                    try:
+                        output.append(chr(int(self._unicode_hex, 16)))
+                    except ValueError:
+                        pass
+                    self._unicode_hex = None
+                continue
+            if self._escaped:
+                self._escaped = False
+                if char == "n":
+                    output.append("\n")
+                elif char == "t":
+                    output.append("\t")
+                elif char == "r":
+                    pass
+                elif char == "u":
+                    self._unicode_hex = ""
+                else:  # \" \\ \/ など
+                    output.append(char)
+                continue
+            if char == "\\":
+                self._escaped = True
+            elif char == '"':
+                self._phase = "done"
+            else:
+                output.append(char)
+        return "".join(output)
+
+
+def chat_completion_json_stream(
+    base_url: str,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.8,
+):
+    """ストリーミング版。('delta', prose断片) を逐次 yield し、最後に ('done', dict) を yield する。
+
+    ストリーム全文のパースに失敗した場合は非ストリーミング（リトライ付き）にフォールバック。
+    """
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    payload = {
+        "model": "local-model",
+        "messages": messages,
+        "temperature": temperature,
+        "response_format": {"type": "json_object"},
+        "stream": True,
+    }
+    extractor = _ProseStreamExtractor()
+    content_parts: list[str] = []
+    try:
+        with httpx.stream(
+            "POST",
+            f"{base_url.rstrip('/')}/v1/chat/completions",
+            json=payload,
+            timeout=LLM_TIMEOUT_SECONDS,
+        ) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data = line[len("data: "):]
+                if data.strip() == "[DONE]":
+                    break
+                try:
+                    delta = json.loads(data)["choices"][0].get("delta", {}).get("content") or ""
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
+                if delta:
+                    content_parts.append(delta)
+                    fragment = extractor.feed(delta)
+                    if fragment:
+                        yield ("delta", fragment)
+    except httpx.HTTPError as error:
+        raise LlmError(f"LLM server unavailable ({base_url}): {error}") from error
+
+    try:
+        parsed = extract_json("".join(content_parts))
+    except LlmError:
+        # ストリーム出力が壊れていた場合は非ストリーミングで作り直す
+        parsed = chat_completion_json(base_url, system_prompt, user_prompt, temperature)
+    yield ("done", parsed)
+
+
 def chat_completion_json(
     base_url: str,
     system_prompt: str,

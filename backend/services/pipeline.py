@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from backend.db.database import get_connection
 from backend.services.state import StoryState
-from backend.services.writer import write_scene
+from backend.services.writer import write_scene_stream
 
 
 def generate_stream(
@@ -33,6 +33,7 @@ def generate_stream(
     slots: [{"card": カード dict, "instruction": その作品でのシーンへの追加指示 | None}]
 
     yield するイベント:
+      {"type": "delta", "position", "text"}   # 清書中の断片（ストリーミング表示用）
       {"type": "scene", "position", "total", "card_id", "card_title", "prose", "state_after", "is_fixed"}
       {"type": "done", "story_id"}
     """
@@ -43,7 +44,8 @@ def generate_stream(
     for index, slot in enumerate(slots):
         card = slot["card"]
         position = "opening" if index == 0 else ("ending" if index == total - 1 else "middle")
-        prose, state = write_scene(
+        prose = ""
+        for event in write_scene_stream(
             card=card,
             state=state,
             plot=plot,
@@ -53,7 +55,11 @@ def generate_stream(
             system_prompt=system_prompt,
             scene_length=scene_length,
             instruction=slot.get("instruction"),
-        )
+        ):
+            if event[0] == "delta":
+                yield {"type": "delta", "position": index, "text": event[1]}
+            else:
+                _, prose, state = event
         scene = {
             "position": index,
             "total": total,

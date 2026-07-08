@@ -58,7 +58,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 value={settings.theaterTextStreamMsPerChar}
                 disabled={!settings.theaterTextStreaming}
                 onChange={(event) => updateSettings({ theaterTextStreamMsPerChar: Number(event.target.value) })}
-                className="h-6 min-w-0 flex-1 accent-[var(--accent)]"
+                className="slider min-w-0 flex-1"
               />
               <button
                 onClick={() => updateSettings({ theaterTextStreamMsPerChar: 45 })}
@@ -85,7 +85,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 step={1}
                 value={settings.theaterFontSizePx}
                 onChange={(event) => updateSettings({ theaterFontSizePx: Number(event.target.value) })}
-                className="h-6 min-w-0 flex-1 accent-[var(--accent)]"
+                className="slider min-w-0 flex-1"
               />
               <button
                 onClick={() => updateSettings({ theaterFontSizePx: 16 })}
@@ -109,7 +109,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 step={5}
                 value={settings.theaterStageScale}
                 onChange={(event) => updateSettings({ theaterStageScale: Number(event.target.value) })}
-                className="h-6 min-w-0 flex-1 accent-[var(--accent)]"
+                className="slider min-w-0 flex-1"
               />
               <button
                 onClick={() => updateSettings({ theaterStageScale: 100 })}
@@ -160,7 +160,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 onChange={(event) =>
                   updateSettings({ theaterVideoCrossfadeSeconds: Number(event.target.value) })
                 }
-                className="h-6 min-w-0 flex-1 accent-[var(--accent)]"
+                className="slider min-w-0 flex-1"
               />
               <button
                 onClick={() => updateSettings({ theaterVideoCrossfadeSeconds: 1.0 })}

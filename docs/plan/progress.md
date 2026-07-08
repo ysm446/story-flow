@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 04:31
+更新日時: 2026-07-09 04:41
 
 ## 現在地
 
@@ -189,6 +189,17 @@ Vault → Compose → Generate → Theater が一本つながった。
   プレイヤー終了時に自動解除。Electron main に window:setFullScreen IPC 追加）
 - 2026-07-09: 修正 — クロスディゾルブの z-index が本文・コントロールより上に浮いて
   動画再生中のテキストが消えていた（isolation: isolate でコンテナ内に封じ込め）
+
+- 2026-07-09: **Generate のトークンストリーミング表示**（作者要望）:
+  - llm.py にストリーミング版 chat completion と _ProseStreamExtractor
+    （JSON 出力から "prose" 文字列の中身だけをエスケープ解決しつつ逐次抽出。
+    キー分断・\n・\uXXXX などチャンク境界跨ぎをランダム分割 42 ケースで検証済み）
+  - pipeline が {"type": "delta", position, text} を SSE に流し、Generate UI が
+    清書中の本文をカーソル（▍）付きで逐次表示。完了時に確定 prose に置き換え
+  - ストリーム全文のパース失敗時は非ストリーミング（リトライ付き）へ自動フォールバック。
+    spec の「清書と state を単一の構造化出力で」は維持
+  - 本文エリア最大高 38vh → 25vh、設定スライダーを細く（track 3px / thumb 12px）
+  - 未検証: 実 LLM でのストリーミング（次回の生成実行で確認）
 
 ## 未完了（plan.md の作業順序に従う）
 

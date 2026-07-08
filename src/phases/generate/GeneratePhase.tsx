@@ -32,6 +32,7 @@ export function GeneratePhase() {
   const [allCards, setAllCards] = useState<Card[]>([])
   const [status, setStatus] = useState<RunStatus>('idle')
   const [scenes, setScenes] = useState<SceneEvent[]>([])
+  const [drafts, setDrafts] = useState<Record<number, string>>({})
   const [storyId, setStoryId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const autoStarted = useRef(false)
@@ -47,6 +48,7 @@ export function GeneratePhase() {
   const handleGenerate = async () => {
     if (anchors.length === 0 || isRunning) return
     setScenes([])
+    setDrafts({})
     setStoryId(null)
     setError(null)
     setStatus('starting-model')
@@ -73,7 +75,9 @@ export function GeneratePhase() {
           scene_length: composition.sceneLength || null
         },
         (event) => {
-          if (event.type === 'scene') {
+          if (event.type === 'delta') {
+            setDrafts((prev) => ({ ...prev, [event.position]: (prev[event.position] ?? '') + event.text }))
+          } else if (event.type === 'scene') {
             setScenes((prev) => [...prev.filter((scene) => scene.position !== event.position), event])
           } else if (event.type === 'done') {
             setStoryId(event.story_id)
@@ -208,6 +212,7 @@ export function GeneratePhase() {
           {anchors.map((anchor, index) => {
             const card = cardById.get(anchor.cardId)
             const scene = scenes.find((item) => item.position === index)
+            const draft = !scene ? drafts[index] : undefined
             const isNext = !scene && scenes.length === index && isRunning
             return (
               <div
@@ -225,6 +230,12 @@ export function GeneratePhase() {
                   <span className="truncate">{card?.title ?? ''}</span>
                   {isNext && <span className="text-[var(--accent)]">清書中…</span>}
                 </div>
+                {draft !== undefined && (
+                  <p className="mt-2 whitespace-pre-wrap text-[14px] leading-[1.8] text-[var(--text-dim)]">
+                    {draft}
+                    <span className="animate-pulse text-[var(--accent)]">▍</span>
+                  </p>
+                )}
                 {scene && (
                   <>
                     <p className="mt-2 whitespace-pre-wrap text-[14px] leading-[1.8]">{scene.prose}</p>

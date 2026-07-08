@@ -95,6 +95,38 @@ textarea {
 .kenburns-2 { animation: kenburns-2 30s ease-out forwards; }
 .kenburns-3 { animation: kenburns-3 30s ease-out forwards; }
 
+/* 設定画面のスライダー（track は細く、thumb は小さく。hit area は 18px 確保） */
+input[type='range'].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range'].slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+input[type='range'].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+input[type='range'].slider:hover::-webkit-slider-thumb {
+  background: var(--accent-hover);
+}
+input[type='range'].slider:disabled {
+  cursor: default;
+}
+input[type='range'].slider:disabled::-webkit-slider-thumb {
+  background: var(--text-faint);
+}
+
 /* Theater: 本文スクロール領域（スクロールバーは見せない） */
 .no-scrollbar {
   scrollbar-width: none;

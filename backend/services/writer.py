@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from backend.services.llm import chat_completion_json
+from backend.services.llm import chat_completion_json, chat_completion_json_stream
 from backend.services.state import StoryState
 
 # 編集対象から分離した出力形式指示。壊されると生成が止まるためシステム側で必ず付与する
@@ -64,13 +64,44 @@ def write_scene(
     user = _build_user_prompt(card, state, plot, target_tone, position, scene_length, instruction)
 
     result = chat_completion_json(base_url, system, user)
+    return _parse_writer_result(result, state)
 
+
+def write_scene_stream(
+    card: dict,
+    state: StoryState,
+    plot: str,
+    target_tone: str | None,
+    position: str,
+    base_url: str,
+    system_prompt: str,
+    scene_length: str | None = None,
+    instruction: str | None = None,
+):
+    """write_scene のストリーミング版 generator。
+
+    ('delta', 清書文の断片) を逐次 yield し、最後に ('scene', prose, 更新後 StoryState) を yield する。
+    """
+    system = f"{system_prompt.strip()}\n\n{OUTPUT_FORMAT_INSTRUCTION}"
+    user = _build_user_prompt(card, state, plot, target_tone, position, scene_length, instruction)
+
+    result: dict | None = None
+    for kind, payload in chat_completion_json_stream(base_url, system, user):
+        if kind == "delta":
+            yield ("delta", payload)
+        else:
+            result = payload
+    prose, next_state = _parse_writer_result(result or {}, state)
+    yield ("scene", prose, next_state)
+
+
+def _parse_writer_result(result: dict, fallback_state: StoryState) -> tuple[str, StoryState]:
     prose = result.get("prose")
     if not isinstance(prose, str) or not prose.strip():
         raise ValueError("writer output has no prose")
 
     raw_state = result.get("state")
-    next_state = StoryState.from_dict(raw_state) if isinstance(raw_state, dict) else state
+    next_state = StoryState.from_dict(raw_state) if isinstance(raw_state, dict) else fallback_state
     return prose.strip(), next_state
 
 
