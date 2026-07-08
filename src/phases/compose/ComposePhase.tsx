@@ -257,6 +257,9 @@ function ComposeInner() {
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
   const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null)
   const [wsMenu, setWsMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null)
+  const [sidebarWidth, setSidebarWidth] = useState(240)
+  const [rightWidth, setRightWidth] = useState(280)
+  const [assetHeight, setAssetHeight] = useState(150)
   const hydrated = useRef(false)
   const reactFlow = useReactFlow()
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -518,12 +521,51 @@ function ComposeInner() {
   const inputClass =
     'w-full rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-[13px] focus:outline focus:outline-1 focus:outline-[var(--accent-border)]'
 
+  // ドラッグでのリサイズ共通処理。delta（開始点からの移動量）→ 新しいサイズを反映する
+  const startResize = (
+    event: React.PointerEvent,
+    axis: 'x' | 'y',
+    apply: (delta: number) => void
+  ) => {
+    event.preventDefault()
+    const start = axis === 'x' ? event.clientX : event.clientY
+    const onMove = (ev: PointerEvent) => apply((axis === 'x' ? ev.clientX : ev.clientY) - start)
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = axis === 'x' ? 'col-resize' : 'row-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+  const startSidebarResize = (event: React.PointerEvent) => {
+    const startWidth = sidebarWidth
+    startResize(event, 'x', (delta) => setSidebarWidth(clamp(startWidth + delta, 180, 480)))
+  }
+  const startRightResize = (event: React.PointerEvent) => {
+    const startWidth = rightWidth
+    startResize(event, 'x', (delta) => setRightWidth(clamp(startWidth - delta, 220, 520)))
+  }
+  const startAssetResize = (event: React.PointerEvent) => {
+    const startHeight = assetHeight
+    startResize(event, 'y', (delta) => setAssetHeight(clamp(startHeight - delta, 90, 400)))
+  }
+
   return (
     <div className="relative flex h-full">
       {nameDialog && <NameDialog state={nameDialog} onClose={() => setNameDialog(null)} />}
 
       {/* 左: 作品（ワークスペース）一覧 */}
-      <aside className="flex w-[240px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)]">
+      <aside
+        style={{ width: sidebarWidth }}
+        className="flex shrink-0 flex-col bg-[var(--bg-sidebar)]"
+      >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
           <span className="text-[13px] font-semibold text-[var(--text-dim)]">作品</span>
           <div className="flex items-center gap-2">
@@ -582,6 +624,16 @@ function ComposeInner() {
         </div>
       </aside>
 
+      {/* 左サイドの幅リサイズ（見た目は 1px・当たり判定は広め） */}
+      <div className="group relative w-px shrink-0 bg-[var(--border)]">
+        <div
+          onPointerDown={startSidebarResize}
+          title="ドラッグで幅を変更"
+          className="absolute inset-y-0 -left-1 -right-1 z-10 cursor-col-resize"
+        />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-[var(--accent-border)] opacity-0 group-hover:opacity-100" />
+      </div>
+
       {/* 中央: ノードネットワーク + 下部アセットエリア */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div ref={canvasRef} className="relative min-h-0 flex-1">
@@ -600,7 +652,21 @@ function ComposeInner() {
             className="bg-[var(--bg-canvas)]"
           >
             <Background gap={20} />
-            <MiniMap pannable zoomable className="!bg-[var(--bg-sidebar)]" />
+            <MiniMap
+              pannable
+              zoomable
+              position="bottom-right"
+              nodeColor={(node) => (node.selected ? '#7c5af7' : '#2e3140')}
+              nodeStrokeColor={(node) => (node.selected ? '#7c5af7' : '#3a3e4f')}
+              nodeStrokeWidth={2}
+              nodeBorderRadius={4}
+              maskColor="rgba(13, 15, 20, 0.6)"
+              maskStrokeColor="rgba(124, 90, 247, 0.35)"
+              maskStrokeWidth={1}
+              bgColor="#111318"
+              style={{ border: '1px solid #252830', borderRadius: 10 }}
+              className="!m-3 overflow-hidden !rounded-[10px] shadow-lg"
+            />
           </ReactFlow>
 
           {/* ステータス */}
@@ -609,12 +675,25 @@ function ComposeInner() {
           </div>
         </div>
 
+        {/* アセットエリアの高さリサイズ（見た目は 1px・当たり判定は広め） */}
+        <div className="group relative h-px shrink-0 bg-[var(--border)]">
+          <div
+            onPointerDown={startAssetResize}
+            title="ドラッグで高さを変更"
+            className="absolute inset-x-0 -top-1 -bottom-1 z-10 cursor-row-resize"
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[var(--accent-border)] opacity-0 group-hover:opacity-100" />
+        </div>
+
         {/* アセットエリア: 未配置カードをクリックで配置 */}
-        <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-sidebar)]">
+        <div
+          style={{ height: assetHeight }}
+          className="flex shrink-0 flex-col bg-[var(--bg-sidebar)]"
+        >
           <div className="px-3 pt-2 text-[12px] font-semibold text-[var(--text-dim)]">
             アセット（クリックでキャンバスに配置）
           </div>
-          <div className="flex gap-2 overflow-x-auto px-3 pb-3 pt-2">
+          <div className="flex min-h-0 flex-1 items-start gap-2 overflow-x-auto overflow-y-hidden px-3 pb-3 pt-2">
             {palette.length === 0 ? (
               <div className="py-4 text-[12px] text-[var(--text-faint)]">
                 {allCards.length === 0 ? 'Vault でカードを登録してください。' : 'すべて配置済みです。'}
@@ -689,8 +768,21 @@ function ComposeInner() {
         </>
       )}
 
+      {/* 右サイドの幅リサイズ（見た目は 1px・当たり判定は広め） */}
+      <div className="group relative w-px shrink-0 bg-[var(--border)]">
+        <div
+          onPointerDown={startRightResize}
+          title="ドラッグで幅を変更"
+          className="absolute inset-y-0 -left-1 -right-1 z-10 cursor-col-resize"
+        />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-[var(--accent-border)] opacity-0 group-hover:opacity-100" />
+      </div>
+
       {/* 生成設定 + 選択ノードのプロパティ */}
-      <aside className="flex w-[280px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-sidebar)]">
+      <aside
+        style={{ width: rightWidth }}
+        className="flex shrink-0 flex-col bg-[var(--bg-sidebar)]"
+      >
         {selectedNode && selectedNodeData && (
           <div className="border-b border-[var(--border)]">
             <div className="px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">ノードのプロパティ</div>
