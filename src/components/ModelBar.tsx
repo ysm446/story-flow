@@ -46,10 +46,13 @@ export function ModelBar({
     }
   }
 
+  // name は models/ 相対パス（フォルダ名/ファイル名）。フォルダ名がモデル名とほぼ同じで
+  // 二重に見えるため、バーにはファイル名だけを出す（フルパスはツールチップ）
+  const selectedLabel = settings?.selectedModelName ? displayName(settings.selectedModelName) : 'モデル'
   const label = busy
-    ? `${loadingName ?? settings?.selectedModelName ?? 'モデル'} を読み込み中…`
+    ? `${loadingName ? displayName(loadingName) : selectedLabel} を読み込み中…`
     : loaded
-      ? settings?.selectedModelName ?? 'モデル'
+      ? selectedLabel
       : installed
         ? 'モデルを選択'
         : 'llama-server 未導入'
@@ -59,7 +62,7 @@ export function ModelBar({
       <button
         type="button"
         onClick={openModal}
-        title={error ?? label}
+        title={error ?? settings?.selectedModelName ?? label}
         className={`flex min-w-[200px] max-w-[360px] items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-medium transition ${
           busy
             ? 'animate-pulse border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]'
