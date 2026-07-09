@@ -22,9 +22,11 @@ router = APIRouter(tags=["generate"])
 
 
 class SlotInput(BaseModel):
-    card_id: str
+    kind: Literal["card", "gap"] = "card"  # gap = おまかせスロット（fill_gap で 1 枚選ぶ。v1.5）
+    card_id: str | None = None  # kind=card のとき必須
     instruction: str | None = None  # この作品でのこのシーンへの追加指示（ノードのプロパティ）
     bgm_id: str | None = None  # このシーンの BGM 手動指名（None = 自動選曲）
+    target_role: Literal["intro", "rising", "turn", "climax", "ending"] | None = None  # gap の希望ロール
 
 
 class GenerateInput(BaseModel):
@@ -48,9 +50,14 @@ def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
     try:
         slots = []
         for slot in slot_inputs:
-            row = conn.execute("SELECT * FROM cards WHERE id = ?", (slot.card_id,)).fetchone()
-            if row is None:
-                raise HTTPException(status_code=404, detail=f"card not found: {slot.card_id}")
+            card = None
+            if slot.kind == "card":
+                if not slot.card_id:
+                    raise HTTPException(status_code=422, detail="card_id is required for card slots")
+                row = conn.execute("SELECT * FROM cards WHERE id = ?", (slot.card_id,)).fetchone()
+                if row is None:
+                    raise HTTPException(status_code=404, detail=f"card not found: {slot.card_id}")
+                card = dict(row)
             # 削除済み BGM の指名（workspace graph に残った参照）は自動選曲に劣化させる。
             # そのまま通すと全シーン生成後の save_story が外部キー違反で全損する
             bgm_id = slot.bgm_id
@@ -58,7 +65,15 @@ def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
                 bgm_row = conn.execute("SELECT id FROM bgm WHERE id = ?", (bgm_id,)).fetchone()
                 if bgm_row is None:
                     bgm_id = None
-            slots.append({"card": dict(row), "instruction": slot.instruction, "bgm_id": bgm_id})
+            slots.append(
+                {
+                    "kind": "gap" if slot.kind == "gap" else "fixed",
+                    "card": card,
+                    "instruction": slot.instruction,
+                    "bgm_id": bgm_id,
+                    "target_role": slot.target_role,
+                }
+            )
         return slots
     finally:
         conn.close()
@@ -84,11 +99,17 @@ def _load_base_scenes(base_story_id: str, expected_count: int, start_position: i
 
 @router.post("/generate")
 def generate_story(payload: GenerateInput) -> StreamingResponse:
+    # 始点・終点は必ずアンカー（spec §1.5: 作者が置いた固定点の間を埋める）
+    if payload.slots[0].kind == "gap" or payload.slots[-1].kind == "gap":
+        raise HTTPException(status_code=422, detail="始点と終点にはカードを置いてください（おまかせスロットは中間のみ）")
     slots = _load_slots(payload.slots)
     base_scenes: list[dict] | None = None
     if payload.mode != "full":
         if not payload.base_story_id:
             raise HTTPException(status_code=422, detail="base_story_id is required for partial regeneration")
+        if any(slot["kind"] == "gap" for slot in slots):
+            # 部分再生成はテイクの確定済みカード列に対して行う（穴の再抽選は新規生成で）
+            raise HTTPException(status_code=422, detail="部分再生成のスロットにおまかせは指定できません")
         base_scenes = _load_base_scenes(payload.base_story_id, len(slots), payload.start_position)
     writer_base_url = payload.writer_base_url or WRITER_BASE_URL
     system_prompt = None

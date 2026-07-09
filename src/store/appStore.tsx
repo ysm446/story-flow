@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import type { CardTone, SceneLength } from '../lib/api'
+import type { CardRole, CardTone, SceneLength } from '../lib/api'
 
 export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 
@@ -11,7 +11,10 @@ export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
  * グラフから導出する（古いスナップショットによる生成事故を防ぐ）。
  */
 export interface CompositionAnchor {
-  cardId: string
+  kind: 'card' | 'gap'
+  nodeId: string // Compose グラフ上のノード ID（card はカード ID、gap は gap-xxx）
+  cardId: string | null // gap のときは null（生成時に fill_gap が選ぶ）
+  targetRole: CardRole | null // gap の希望ロール
   instruction: string | null
   bgmId: string | null
 }

@@ -20,14 +20,15 @@ import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
 import { useUiSettings } from '../../store/settings'
 
-type SceneStatus = 'pending' | 'streaming' | 'done' | 'reused' | 'stale'
+type SceneStatus = 'pending' | 'selecting' | 'streaming' | 'done' | 'reused' | 'stale'
 
 interface SceneView {
-  cardId: string
+  cardId: string | null // おまかせスロットは選定されるまで null
   title: string
   prose: string
   status: SceneStatus
   bgmId: string | null
+  selectionReason: string | null // 穴埋めで選ばれたシーンの選定理由
 }
 
 type RunStatus = 'idle' | 'starting-model' | 'generating' | 'done' | 'error'
@@ -49,6 +50,7 @@ const NODE_GAP_X = 360
 
 const STATUS_LABELS: Record<SceneStatus, string | null> = {
   pending: null,
+  selecting: 'カード選定中…',
   streaming: '清書中…',
   done: null,
   reused: 'コピー',
@@ -62,7 +64,7 @@ function SceneNode({ data }: NodeProps) {
   return (
     <div
       className={`w-[300px] overflow-hidden rounded-md border bg-[var(--bg-card)] ${
-        scene.status === 'streaming'
+        scene.status === 'streaming' || scene.status === 'selecting'
           ? 'border-[var(--accent)]'
           : scene.status === 'stale'
             ? 'border-[var(--danger)]'
@@ -94,7 +96,7 @@ function SceneNode({ data }: NodeProps) {
         {statusLabel && (
           <span
             className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
-              scene.status === 'streaming'
+              scene.status === 'streaming' || scene.status === 'selecting'
                 ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
                 : scene.status === 'stale'
                   ? 'bg-[rgba(239,68,68,0.15)] text-[var(--danger)]'
@@ -106,6 +108,15 @@ function SceneNode({ data }: NodeProps) {
           </span>
         )}
       </div>
+      {scene.selectionReason && (
+        <div
+          className="border-b border-[var(--border)] px-2.5 py-1 text-[10px] leading-relaxed text-[var(--text-faint)]"
+          title={scene.selectionReason}
+        >
+          <span className="font-semibold">選定: </span>
+          <span>{scene.selectionReason}</span>
+        </div>
+      )}
       {bgmTitle && (
         <div
           className="flex items-center gap-1.5 border-b border-[var(--border)] px-2.5 py-1 text-[10px] text-[var(--text-faint)]"
@@ -236,7 +247,8 @@ function GenerateInner() {
             title: lookup.get(scene.card_id)?.title ?? '(削除済みカード)',
             prose: scene.prose,
             status: 'done' as const,
-            bgmId: scene.bgm_id
+            bgmId: scene.bgm_id,
+            selectionReason: scene.selection_reason
           }))
       )
       setCurrentTakeId(storyId)
@@ -248,31 +260,42 @@ function GenerateInner() {
 
   const runGeneration = async (options: { baseStoryId: string | null; startPosition: number; mode: 'full' | RegenMode }) => {
     if (isRunning) return
-    // スロット列: full は Compose のグラフから導出した鎖、部分再生成は表示中テイクのカード列
+    // スロット列: full は Compose のグラフから導出した鎖（おまかせ含む）、
+    // 部分再生成は表示中テイクの確定済みカード列
     const slotCards =
       options.mode === 'full'
         ? (anchors ?? []).map((anchor) => ({
+            kind: anchor.kind,
             cardId: anchor.cardId,
             instruction: anchor.instruction,
-            bgmId: anchor.bgmId
+            bgmId: anchor.bgmId,
+            targetRole: anchor.targetRole
           }))
         : sceneViews.map((scene) => {
             const node = composeNodes.find((item) => item.id === scene.cardId)
             const data = node ? (node.data as Record<string, unknown>) : null
             const instruction = data ? ((data.instruction as string) ?? '').trim() : ''
-            return { cardId: scene.cardId, instruction: instruction || null, bgmId: (data?.bgmId as string) ?? null }
+            return {
+              kind: 'card' as const,
+              cardId: scene.cardId,
+              instruction: instruction || null,
+              bgmId: (data?.bgmId as string) ?? null,
+              targetRole: null
+            }
           })
     if (slotCards.length === 0) return
+    if (slotCards.some((slot) => slot.kind === 'card' && !slot.cardId)) return
 
     setError(null)
     setStatus('starting-model')
     setSceneViews(
       slotCards.map((slot) => ({
         cardId: slot.cardId,
-        title: cardById.get(slot.cardId)?.title ?? '',
+        title: slot.kind === 'gap' ? 'おまかせ' : (slot.cardId ? cardById.get(slot.cardId)?.title : '') ?? '',
         prose: '',
         status: 'pending' as const,
-        bgmId: slot.bgmId ?? null
+        bgmId: slot.bgmId ?? null,
+        selectionReason: null
       }))
     )
 
@@ -294,9 +317,11 @@ function GenerateInner() {
         '/generate',
         {
           slots: slotCards.map((slot) => ({
+            kind: slot.kind,
             card_id: slot.cardId,
             instruction: slot.instruction,
-            bgm_id: slot.bgmId ?? null
+            bgm_id: slot.bgmId ?? null,
+            target_role: slot.targetRole ?? null
           })),
           plot: composition.plot,
           target_tone: composition.targetTone || null,
@@ -319,15 +344,39 @@ function GenerateInner() {
                   : scene
               )
             )
+          } else if (event.type === 'selecting') {
+            setSceneViews((prev) =>
+              prev.map((scene, index) =>
+                index === event.position ? { ...scene, status: 'selecting' } : scene
+              )
+            )
+          } else if (event.type === 'selected') {
+            // おまかせスロットにカードが確定した（このあと清書が始まる）
+            setSceneViews((prev) =>
+              prev.map((scene, index) =>
+                index === event.position
+                  ? {
+                      ...scene,
+                      cardId: event.card_id,
+                      title: event.card_title || scene.title,
+                      selectionReason: event.reason,
+                      status: 'streaming'
+                    }
+                  : scene
+              )
+            )
           } else if (event.type === 'scene') {
             setSceneViews((prev) =>
               prev.map((scene, index) =>
                 index === event.position
                   ? {
                       ...scene,
+                      cardId: event.card_id,
+                      title: event.card_title || scene.title,
                       prose: event.prose,
                       status: event.stale ? 'stale' : event.reused ? 'reused' : 'done',
-                      bgmId: event.bgm_id
+                      bgmId: event.bgm_id,
+                      selectionReason: event.selection_reason
                     }
                   : scene
               )
@@ -401,7 +450,12 @@ function GenerateInner() {
   const computeLayout = useCallback(
     (count: number) => {
       const bases = Array.from({ length: count }, (_, i) => {
-        const composeNode = composeNodes.find((item) => item.id === sceneViews[i]?.cardId)
+        // カード ID で照合し、おまかせスロット（選定前後とも）は鎖の同位置のノード ID で照合する
+        const composeNode =
+          composeNodes.find((item) => item.id === sceneViews[i]?.cardId) ??
+          (anchors && anchors.length === count
+            ? composeNodes.find((item) => item.id === anchors[i].nodeId)
+            : undefined)
         return composeNode ? { ...composeNode.position } : { x: 60 + i * NODE_GAP_X, y: 120 }
       })
       for (let i = 1; i < bases.length; i++) {
@@ -409,7 +463,7 @@ function GenerateInner() {
       }
       return bases
     },
-    [composeNodes, sceneViews]
+    [composeNodes, sceneViews, anchors]
   )
 
   // シーンの内容（ストリーミング）を既存ノードへ流し込む。position と React Flow が
@@ -432,7 +486,7 @@ function GenerateInner() {
           data: {
             index,
             scene,
-            card: cardById.get(scene.cardId),
+            card: scene.cardId ? cardById.get(scene.cardId) : undefined,
             bgmTitle: scene.bgmId ? bgmTitleById.get(scene.bgmId) ?? '（削除済み BGM）' : null,
             isRunning,
             hasTake: currentTakeId !== null,

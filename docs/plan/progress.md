@@ -1,13 +1,13 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-10 00:34
+更新日時: 2026-07-10 03:51
 
 ## 現在地
 
-**フェーズ 4（Compose）まで完了 — v1 の全フェーズが実装済み**。
-Vault → Compose → Generate → Theater が一本つながった。
-アプリでの通し確認と使い勝手の調整 → v1.5（穴埋め）へ。
+**フェーズ 5（v1.5 穴埋め）の中核 fill_gap を実装** — おまかせノードを置いて生成すると
+候補検索 → LLM 選択でカードが埋まるところまで。実 LLM での通し確認と、
+多様性チューニング・浅いバックトラック（spec §7）が残り。
 
 ## 完了済み
 
@@ -386,21 +386,48 @@ Vault → Compose → Generate → Theater が一本つながった。
 - 2026-07-10: Compose アセットエリアを折り返し表示に（作者要望）— 一行の横スクロール →
   flex-wrap + 縦スクロール
 
+- 2026-07-10: **フェーズ 5（v1.5）: fill_gap 実装 — おまかせスロット**（穴の UI は
+  作者選択で「おまかせノード方式」に確定。plan.md フェーズ 5 に決定記録）:
+  - backend: `services/selection.py` 本実装 — `retrieve_candidates`（A/B の保存済み
+    埋め込みの中点で sqlite-vec KNN、**ロールはスコアボーナス** ROLE_BONUS=0.15、
+    使用済み除外、埋め込み不可時はロール優先 + ランダムに劣化）+ `select_card`
+    （selector プロンプト + 出力形式指示をシステム付与、候補外 ID / LLM 失敗は
+    検索最上位に劣化、temperature 0.6）+ `fill_gap`。CANDIDATE_K=6 で確定
+  - pipeline: slots に kind（fixed/gap）。gap は fill_gap で 1 枚確定してから清書
+    （左から 1 枚ずつ、選んだカードを used に繰り込み）。SSE に selecting / selected
+    イベント追加。is_fixed=0 + selection_reason を保存。selector は
+    STORY_FLOW_SELECTOR_URL で分離可（既定 writer と同一）
+  - ルート検証: 始点・終点は gap 不可（422）、部分再生成のスロットに gap 不可（422。
+    穴の再抽選は新規生成で行う）
+  - Compose: アセットエリアの「＋ おまかせスロット」で？ノード（破線）を配置。
+    プロパティで希望ロール / 追加指示 / BGM 指名。workspace graph に kind /
+    target_role を保存（後方互換: kind 省略 = card）。gap ノード ID は `gap-` 接頭辞
+  - Generate: 「カード選定中…」→ 選定カード + 選定理由をノードに表示（理由は
+    テイク表示でも出る）。おまかせ由来のシーンはレイアウトを鎖の同位置ノードで照合
+  - 検証: build（型チェック込み）/ py_compile / TestClient E2E 6 項目 PASS
+    （候補検索の使用済み除外と件数、fill_gap のスタブ選定・候補外 ID 劣化、
+    SSE イベント列 selecting→selected→scene、is_fixed=0 + 理由の永続化、
+    端 gap / 部分再生成 gap の 422）。※埋め込みサーバ停止中だったため
+    ベクトル劣化経路（ロール優先 + ランダム）で検証。実 LLM + 実ベクトルの通しは
+    次回アプリ起動時に確認
+  - 残: 多様性チューニング（tone のサイコロ等）、浅いバックトラック、在庫不足時の
+    橋渡し逃げ道（現状は明確なエラーで停止）
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）
 - [x] フェーズ 2: Generate 逐次パイプライン（穴埋めなし）
 - [x] フェーズ 3: Theater
 - [x] フェーズ 4: Compose（→ v1 完成。通し確認と調整は残）
-- [ ] フェーズ 5: v1.5（fill_gap / 多様性 / バックトラック）
+- [ ] フェーズ 5: v1.5 — fill_gap 実装済み（2026-07-10）。多様性 / バックトラックが残
 
 ## 次の一手
 
-1. アプリで v1 を通し確認（Vault 登録 → Compose で繋ぐ → Generate → Theater 再生）し、
-   使い勝手を調整（Ken Burns の動き量、オート送り・ストリーミング速度、Compose の操作感）
-2. 積み残しの検討: 埋め込み未計算カードの一括再計算
-3. フェーズ 5（v1.5）: `fill_gap`（retrieve_candidates + select_card）。
-   ロールはハードフィルタでなくスコアボーナス案を第一候補に（plan.md 参照）
+1. アプリで通し確認: v1 経路に加えて**おまかせスロット入りの生成**（Compose で？ノードを
+   挟む → 生成 → 選定の進行表示 → 選ばれたカードの妥当性 → Theater 再生）
+2. v1.5 チューニング: 選定の多様性（同じカードばかり選ばれないか）、選定理由の質、
+   ROLE_BONUS / CANDIDATE_K / temperature の当たり確認
+3. 積み残し: 埋め込み未計算カードの一括再計算、浅いバックトラック（行き止まり対策）
 
 - 起動は `start.bat`。環境注意: この PC の `python` は Store スタブのため `py` を使う
 - 生成中の清書プロンプトは Generate 画面の「清書プロンプトを編集」から上書きできる

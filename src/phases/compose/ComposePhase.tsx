@@ -128,13 +128,53 @@ export function ComposePhase() {
 }
 
 interface AnchorNodeData {
-  card: Card
+  /** 省略 = card。gap = おまかせスロット（生成時に fill_gap がカードを選ぶ。v1.5） */
+  kind?: 'card' | 'gap'
+  card?: Card // gap のときは無し
   instruction?: string
   bgmId?: string | null
+  targetRole?: CardRole | null // gap の希望ロール
+}
+
+/** おまかせスロットノード: 生成時に LLM が在庫から 1 枚選んで埋める */
+function GapNode({ data, selected }: NodeProps) {
+  const { instruction, bgmId, targetRole } = data as unknown as AnchorNodeData
+  return (
+    <div
+      className={`w-[190px] overflow-hidden rounded-md border border-dashed bg-[var(--bg-canvas)] ${
+        selected ? 'border-[var(--accent)]' : 'border-[var(--border-strong)]'
+      }`}
+    >
+      <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-[var(--accent)]" />
+      <div className="flex h-[84px] items-center justify-center text-[28px] font-semibold text-[var(--text-faint)]">
+        ？
+      </div>
+      <div className="px-2.5 py-2">
+        <div className="truncate text-[12px] font-medium text-[var(--text-dim)]">おまかせ</div>
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="rounded-full bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--text-faint)]">
+            {targetRole ? ROLE_LABELS[targetRole] : 'ロール自動'}
+          </span>
+          {instruction?.trim() && (
+            <span className="text-[var(--text-dim)]" title="この作品での追加指示あり">
+              <IconPencil size={10} />
+            </span>
+          )}
+          {bgmId && (
+            <span className="text-[var(--text-dim)]" title="BGM を指名">
+              <IconMusic size={10} />
+            </span>
+          )}
+        </div>
+      </div>
+      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !bg-[var(--accent)]" />
+    </div>
+  )
 }
 
 function AnchorNode({ data, selected }: NodeProps) {
   const { card, instruction, bgmId } = data as unknown as AnchorNodeData
+  if (!card) return null
   return (
     <div
       className={`w-[190px] overflow-hidden rounded-md border bg-[var(--bg-card)] ${
@@ -185,12 +225,26 @@ function AnchorNode({ data, selected }: NodeProps) {
   )
 }
 
-const nodeTypes = { anchor: AnchorNode }
+const nodeTypes = { anchor: AnchorNode, gap: GapNode }
 
 /** ワークスペースの graph（ID + 座標 + 指示文）を、実在するカードで React Flow ノードに復元する */
 function hydrateGraph(graph: WorkspaceGraph, cardById: Map<string, Card>): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   for (const item of graph.nodes ?? []) {
+    if (item.kind === 'gap') {
+      nodes.push({
+        id: item.id,
+        type: 'gap',
+        position: { x: item.x, y: item.y },
+        data: {
+          kind: 'gap',
+          instruction: item.instruction ?? '',
+          bgmId: item.bgm_id ?? null,
+          targetRole: item.target_role ?? null
+        }
+      })
+      continue
+    }
     const card = cardById.get(item.id)
     if (!card) continue // 削除済みカードのノードは落とす
     nodes.push({
@@ -209,13 +263,19 @@ function hydrateGraph(graph: WorkspaceGraph, cardById: Map<string, Card>): { nod
 
 function serializeGraph(nodes: Node[], edges: Edge[]): WorkspaceGraph {
   return {
-    nodes: nodes.map((node) => ({
-      id: node.id,
-      x: node.position.x,
-      y: node.position.y,
-      instruction: ((node.data as unknown as AnchorNodeData).instruction ?? '').trim() || null,
-      bgm_id: (node.data as unknown as AnchorNodeData).bgmId ?? null
-    })),
+    nodes: nodes.map((node) => {
+      const data = node.data as unknown as AnchorNodeData
+      const isGap = node.type === 'gap'
+      return {
+        id: node.id,
+        x: node.position.x,
+        y: node.position.y,
+        kind: isGap ? ('gap' as const) : ('card' as const),
+        instruction: (data.instruction ?? '').trim() || null,
+        bgm_id: data.bgmId ?? null,
+        target_role: isGap ? (data.targetRole ?? null) : null
+      }
+    }),
     edges: edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
   }
 }
@@ -332,19 +392,22 @@ function ComposeInner() {
         setAllBgm(bgmResult.bgm)
         if (prompts) setPromptConfig(prompts)
         const fresh = new Map(cardsResult.cards.map((card) => [card.id, card]))
+        // gap ノードはカードではないので削除判定の対象外
+        const alive = (id: string) => id.startsWith('gap-') || fresh.has(id)
         setNodes((prev) => {
           const next = prev
-            .filter((node) => fresh.has(node.id))
+            .filter((node) => alive(node.id))
             .map((node) => {
+              if (node.type === 'gap') return node
               const data = node.data as unknown as AnchorNodeData
               const card = fresh.get(node.id)!
-              return data.card.updated_at === card.updated_at ? node : { ...node, data: { ...data, card } }
+              return data.card?.updated_at === card.updated_at ? node : { ...node, data: { ...data, card } }
             })
           const unchanged = next.length === prev.length && next.every((node, i) => node === prev[i])
           return unchanged ? prev : next
         })
         setEdges((prev) => {
-          const next = prev.filter((edge) => fresh.has(edge.source) && fresh.has(edge.target))
+          const next = prev.filter((edge) => alive(edge.source) && alive(edge.target))
           return next.length === prev.length ? prev : next
         })
         void refreshWorkspaces()
@@ -482,8 +545,8 @@ function ComposeInner() {
   const selectedNode = nodes.find((node) => node.selected)
   const selectedNodeData = selectedNode ? (selectedNode.data as unknown as AnchorNodeData) : null
 
-  const addCardNode = (card: Card) => {
-    // 現在のビューポート（カメラ）中央に配置する
+  // 現在のビューポート（カメラ）中央の空き位置（既存ノードと重なる場合はずらす）
+  const nextFreePosition = () => {
     let position = { x: 120, y: 120 }
     const rect = canvasRef.current?.getBoundingClientRect()
     if (rect) {
@@ -493,11 +556,30 @@ function ComposeInner() {
       })
       position = { x: center.x - 95, y: center.y - 70 } // ノード（幅 190）の中心を合わせる
     }
-    // 連続追加やノードが既にある位置とは重ならないよう少しずらす
     while (nodes.some((node) => Math.abs(node.position.x - position.x) < 24 && Math.abs(node.position.y - position.y) < 24)) {
       position = { x: position.x + 28, y: position.y + 28 }
     }
-    setNodes((prev) => [...prev, { id: card.id, type: 'anchor', position, data: { card, instruction: '' } }])
+    return position
+  }
+
+  const addCardNode = (card: Card) => {
+    setNodes((prev) => [
+      ...prev,
+      { id: card.id, type: 'anchor', position: nextFreePosition(), data: { card, instruction: '' } }
+    ])
+  }
+
+  // おまかせスロット（v1.5 穴埋め）: 生成時に LLM が在庫から 1 枚選んで埋める
+  const addGapNode = () => {
+    setNodes((prev) => [
+      ...prev,
+      {
+        id: `gap-${crypto.randomUUID()}`,
+        type: 'gap',
+        position: nextFreePosition(),
+        data: { kind: 'gap', instruction: '', bgmId: null, targetRole: null }
+      }
+    ])
   }
 
   const updateNodeInstruction = (nodeId: string, instruction: string) => {
@@ -509,6 +591,12 @@ function ComposeInner() {
   const updateNodeBgm = (nodeId: string, bgmId: string | null) => {
     setNodes((prev) =>
       prev.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, bgmId } } : node))
+    )
+  }
+
+  const updateNodeTargetRole = (nodeId: string, targetRole: CardRole | null) => {
+    setNodes((prev) =>
+      prev.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, targetRole } } : node))
     )
   }
 
@@ -716,8 +804,17 @@ function ComposeInner() {
           style={{ height: assetHeight }}
           className="flex shrink-0 flex-col bg-[var(--bg-sidebar)]"
         >
-          <div className="px-3 pt-2 text-[12px] font-semibold text-[var(--text-dim)]">
-            アセット（クリックでキャンバスに配置）
+          <div className="flex items-center justify-between px-3 pt-2">
+            <span className="text-[12px] font-semibold text-[var(--text-dim)]">
+              アセット（クリックでキャンバスに配置）
+            </span>
+            <button
+              onClick={addGapNode}
+              title="生成時に LLM が在庫から 1 枚選んで埋めるスロットを置く（始点・終点にはできません）"
+              className="flex items-center gap-1 rounded border border-dashed border-[var(--border-strong)] px-2 py-1 text-[11px] text-[var(--text-dim)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
+            >
+              <IconPlus size={11} /> おまかせスロット
+            </button>
           </div>
           <div className="flex min-h-0 flex-1 flex-wrap content-start gap-2 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-2">
             {palette.length === 0 ? (
@@ -813,22 +910,57 @@ function ComposeInner() {
           <div className="border-b border-[var(--border)]">
             <div className="px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">ノードのプロパティ</div>
             <div className="space-y-2 px-3 pb-3">
-              <div className="flex items-center gap-2">
-                {selectedNodeData.card.media_path && (
-                  <img
-                    src={cardFileUrl(selectedNodeData.card.id, true)}
-                    alt=""
-                    className="h-9 w-12 shrink-0 rounded object-cover"
-                    onError={(event) => {
-                      event.currentTarget.style.visibility = 'hidden'
-                    }}
-                  />
-                )}
-                <span className="min-w-0 truncate text-[13px] font-medium">{selectedNodeData.card.title}</span>
-              </div>
-              <p className="max-h-16 overflow-y-auto text-[11px] leading-relaxed text-[var(--text-faint)]">
-                {selectedNodeData.card.brief}
-              </p>
+              {selectedNodeData.card ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    {selectedNodeData.card.media_path && (
+                      <img
+                        src={cardFileUrl(selectedNodeData.card.id, true)}
+                        alt=""
+                        className="h-9 w-12 shrink-0 rounded object-cover"
+                        onError={(event) => {
+                          event.currentTarget.style.visibility = 'hidden'
+                        }}
+                      />
+                    )}
+                    <span className="min-w-0 truncate text-[13px] font-medium">{selectedNodeData.card.title}</span>
+                  </div>
+                  <p className="max-h-16 overflow-y-auto text-[11px] leading-relaxed text-[var(--text-faint)]">
+                    {selectedNodeData.card.brief}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded border border-dashed border-[var(--border-strong)] text-[15px] text-[var(--text-faint)]">
+                      ？
+                    </span>
+                    <span className="min-w-0 truncate text-[13px] font-medium">おまかせスロット</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">
+                    生成時に、前後のシーンの流れに合うカードを在庫から LLM が 1 枚選んで埋めます。
+                  </p>
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
+                      希望ロール（任意。近いカードが優先されやすくなる）
+                    </span>
+                    <select
+                      value={selectedNodeData.targetRole ?? ''}
+                      onChange={(event) =>
+                        updateNodeTargetRole(selectedNode.id, (event.target.value || null) as CardRole | null)
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">自動（指定しない）</option>
+                      {(Object.keys(ROLE_LABELS) as CardRole[]).map((role) => (
+                        <option key={role} value={role}>
+                          {ROLE_LABELS[role]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
               <label className="block">
                 <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
                   この作品での追加指示（任意。清書時にブリーフへ加えられる）

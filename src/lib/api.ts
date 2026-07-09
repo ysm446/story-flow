@@ -92,10 +92,14 @@ export interface WorkspaceGraphNode {
   id: string
   x: number
   y: number
+  /** ノード種別。省略 = card（後方互換）。gap = おまかせスロット（v1.5 穴埋め） */
+  kind?: 'card' | 'gap'
   /** この作品でのこのシーンへの追加指示（ノードのプロパティ） */
   instruction?: string | null
   /** このシーンの BGM 手動指名（null/未設定 = 自動選曲） */
   bgm_id?: string | null
+  /** gap の希望ロール（null = 自動） */
+  target_role?: CardRole | null
 }
 
 export interface WorkspaceGraphEdge {
@@ -187,6 +191,8 @@ export interface StoryStateSnapshot {
 
 export type GenerateEvent =
   | { type: 'delta'; position: number; text: string }
+  | { type: 'selecting'; position: number; total: number }
+  | { type: 'selected'; position: number; total: number; card_id: string; card_title: string; reason: string }
   | {
       type: 'scene'
       position: number
@@ -196,6 +202,7 @@ export type GenerateEvent =
       prose: string
       state_after: StoryStateSnapshot
       is_fixed: boolean
+      selection_reason: string | null
       reused: boolean
       stale: boolean
       bgm_id: string | null
@@ -204,9 +211,11 @@ export type GenerateEvent =
   | { type: 'error'; message: string }
 
 export interface GenerateSlot {
-  card_id: string
+  kind?: 'card' | 'gap'
+  card_id: string | null
   instruction: string | null
   bgm_id: string | null
+  target_role?: CardRole | null
 }
 
 export interface GenerateInput {
