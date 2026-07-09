@@ -719,7 +719,7 @@ function ComposeInner() {
           <div className="px-3 pt-2 text-[12px] font-semibold text-[var(--text-dim)]">
             アセット（クリックでキャンバスに配置）
           </div>
-          <div className="flex min-h-0 flex-1 items-start gap-2 overflow-x-auto overflow-y-hidden px-3 pb-3 pt-2">
+          <div className="flex min-h-0 flex-1 flex-wrap content-start gap-2 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-2">
             {palette.length === 0 ? (
               <div className="py-4 text-[12px] text-[var(--text-faint)]">
                 {allCards.length === 0 ? 'Vault でカードを登録してください。' : 'すべて配置済みです。'}
