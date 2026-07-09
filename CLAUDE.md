@@ -55,8 +55,7 @@
 - 進捗に変化があったら `docs/plan/progress.md` を更新する。
 - `docs/changelog.md` はユーザー向け変更の履歴。日本語で書き、未確定の変更は
   先頭に「未リリース」セクションを作って記録する。
-- `docs/reference/` は設計資料・仕様メモ・調査資料の置き場所。
-- `docs/rules/electron-design-rules.md` — UI の寸法・質感の基準。フロント実装時は必ず従う。
+- `docs/design/` は設計資料（アルゴリズム・仕様メモ・調査資料）の置き場所。
 
 ## ディレクトリ構成（目標形。spec §11）
 

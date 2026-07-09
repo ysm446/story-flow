@@ -152,7 +152,6 @@ Compose から作ると楽しくて沼るが、生成が動かないうちは空
 | `D:\GitHub\lm-graph` | フォーク元。electron-vite 構成、React Flow のグラフ UI（カスタムノード/エッジ）、llama-server のインストーラ（`llamaInstaller.ts`）と起動管理（`llamaServer.ts`）、Tailwind + CSS 変数テーマ |
 | `D:\GitHub\image-assistant` | Vault のメディアライブラリ構造。sha256 命名 + 相対パス保持、サムネ生成、FTS5 トリガ同期、RRF ハイブリッド検索、埋め込みサーバの HTTP ラップ |
 
-UI の質感・寸法は [docs/rules/electron-design-rules.md](../rules/electron-design-rules.md) に従う。
 
 ## 未決事項（spec §14。実装前にここで確定させて記録する）
 

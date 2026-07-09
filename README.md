@@ -74,5 +74,5 @@ npm run dev
 - [docs/plan/goals.md](docs/plan/goals.md) — 目的・完成形・価値基準
 - [docs/plan/plan.md](docs/plan/plan.md) — 実装方針・作業順序
 - [docs/plan/progress.md](docs/plan/progress.md) — 進捗
-- [docs/rules/electron-design-rules.md](docs/rules/electron-design-rules.md) — UI デザインルール
+- [docs/design/](docs/design/) — 設計資料（BGM 選定・中間カード採用アルゴリズムなど）
 - [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md) — エージェント向け作業ルール

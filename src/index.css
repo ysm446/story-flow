@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* テーマトークン（lm-graph から引き継ぎ。docs/rules/electron-design-rules.md 準拠） */
+/* テーマトークン（lm-graph から引き継ぎ） */
 :root {
   color-scheme: dark;
   --bg: #0d0f14;
