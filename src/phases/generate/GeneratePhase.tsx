@@ -331,6 +331,7 @@ function GenerateInner() {
           scene_length: composition.sceneLength || null,
           include_images: uiSettings.generateIncludeImages && settings.supportsVision,
           include_bgm: uiSettings.theaterBgmEnabled,
+          folder_ids: composition.folderIds.length > 0 ? composition.folderIds : null,
           base_story_id: options.baseStoryId,
           start_position: options.startPosition,
           mode: options.mode

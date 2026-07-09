@@ -50,11 +50,26 @@ _ROLE_LABELS = {
 }
 
 
-def load_inventory(exclude: set[str]) -> list[dict]:
-    """使用可能な在庫カード(使用済みを除外)。"""
+def load_inventory(exclude: set[str], folder_ids: list[str] | None = None) -> list[dict]:
+    """使用可能な在庫カード(使用済みを除外)。
+
+    folder_ids を指定すると「ルート(folder_id IS NULL)∪ 指定フォルダのサブツリー」に絞る。
+    ルートは全作品共有の共通素材として常に含まれる(docs/design/gap-fill-selection.md)。
+    未指定(空)は従来どおり全カード(フォルダ機能を使っていないライブラリと挙動を揃える)。
+    """
+    from backend.routes.folders import expand_folder_ids  # 循環 import 回避のため遅延
+
     conn = get_connection()
     try:
-        rows = conn.execute("SELECT * FROM cards").fetchall()
+        if folder_ids:
+            allowed = expand_folder_ids(conn, folder_ids)
+            placeholders = ",".join("?" * len(allowed)) if allowed else "NULL"
+            rows = conn.execute(
+                f"SELECT * FROM cards WHERE folder_id IS NULL OR folder_id IN ({placeholders})",
+                tuple(allowed),
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM cards").fetchall()
     finally:
         conn.close()
     return [dict(row) for row in rows if row["id"] not in exclude]

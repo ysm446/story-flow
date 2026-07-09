@@ -24,6 +24,8 @@ export interface CompositionDraft {
   targetTone: CardTone | ''
   promptPresetId: string | null
   sceneLength: SceneLength | ''
+  /** この作品で使うフォルダ（ルートは常時使用。選択はサブツリーを含む。空 = ルートのみ） */
+  folderIds: string[]
 }
 
 interface AppStore {
@@ -52,7 +54,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     plot: '',
     targetTone: '',
     promptPresetId: null,
-    sceneLength: ''
+    sceneLength: '',
+    folderIds: []
   })
   const [composeNodes, setComposeNodes] = useState<Node[]>([])
   const [composeEdges, setComposeEdges] = useState<Edge[]>([])

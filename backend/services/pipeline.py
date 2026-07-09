@@ -37,6 +37,7 @@ def generate_stream(
     base_scenes: list[dict] | None = None,
     start_position: int = 0,
     mode: str = "full",
+    folder_ids: list[str] | None = None,
 ) -> Iterator[dict]:
     """スロット列を左から逐次清書し、シーン毎に dict を yield する。
 
@@ -112,7 +113,7 @@ def generate_stream(
                 state,
                 prev_card,
                 _next_fixed_card(slots, index),
-                load_inventory(exclude=used_ids),
+                load_inventory(exclude=used_ids, folder_ids=folder_ids),
                 slot.get("target_role"),
                 target_tone,
                 used_ids,

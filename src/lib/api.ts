@@ -46,11 +46,22 @@ export interface Card {
   media_type: 'image' | 'video' | null
   role: CardRole | null // null = 自動/汎用
   tone: CardTone | null
+  folder_id: string | null // null = ルート（全作品共有）
   created_at: string
   updated_at: string
   tags: CardTag[]
   has_embedding: boolean
   distance?: number
+}
+
+export interface Folder {
+  id: string
+  name: string
+  parent_id: string | null // null = トップレベル
+  sort_order: number
+  created_at: string
+  updated_at: string
+  card_count: number // 直下のカード数（子孫は含まない）
 }
 
 export interface CardInput {
@@ -76,6 +87,8 @@ export interface ListCardsParams {
   place?: string
   time?: string
   mood?: string
+  /** 'root' = ルート（folder_id IS NULL）、フォルダ ID = そのフォルダ直下。省略 = 全部 */
+  folder?: string
 }
 
 export interface StorySummary {
@@ -131,6 +144,7 @@ export interface Workspace {
   target_tone: CardTone | null
   prompt_preset_id: string | null
   scene_length: SceneLength | null
+  folder_ids: string[] // この作品で使うフォルダ（ルートは常時使用。選択はサブツリーを含む）
   created_at: string
   updated_at: string
 }
@@ -145,6 +159,7 @@ export interface WorkspaceUpdateInput {
   clear_prompt_preset?: boolean
   scene_length?: SceneLength | null
   clear_scene_length?: boolean
+  folder_ids?: string[]
 }
 
 export interface StoryScene {
@@ -228,6 +243,7 @@ export interface GenerateInput {
   scene_length: SceneLength | null
   include_images: boolean
   include_bgm: boolean
+  folder_ids: string[] | null
   base_story_id: string | null
   start_position: number
   mode: 'full' | 'from_here' | 'single'
@@ -297,6 +313,25 @@ export const api = {
     }
     return (await response.json()) as Card
   },
+
+  listFolders: () => request<{ folders: Folder[]; root_count: number }>('/folders'),
+
+  createFolder: (name: string, parentId?: string | null) =>
+    request<Folder>('/folders', { method: 'POST', body: JSON.stringify({ name, parent_id: parentId ?? null }) }),
+
+  renameFolder: (folderId: string, name: string) =>
+    request<Folder>(`/folders/${folderId}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+
+  moveFolder: (folderId: string, parentId: string | null) =>
+    request<Folder>(`/folders/${folderId}/parent`, { method: 'PUT', body: JSON.stringify({ parent_id: parentId }) }),
+
+  reorderFolders: (ids: string[]) =>
+    request<{ ok: boolean }>('/folders/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+
+  deleteFolder: (folderId: string) => request<{ ok: boolean }>(`/folders/${folderId}`, { method: 'DELETE' }),
+
+  assignCardFolder: (cardId: string, folderId: string | null) =>
+    request<Card>(`/cards/${cardId}/folder`, { method: 'POST', body: JSON.stringify({ folder_id: folderId }) }),
 
   similarByCard: (cardId: string, k = 6) =>
     request<{ cards: Card[] }>(`/cards/similar?card_id=${encodeURIComponent(cardId)}&k=${k}`),

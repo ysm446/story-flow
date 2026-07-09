@@ -39,6 +39,7 @@ class GenerateInput(BaseModel):
     scene_length: Literal["short", "standard", "long"] | None = None  # シーンの目安の長さ
     include_images: bool = False  # カードのメディアを writer に見せる（vision 対応モデル向け）
     include_bgm: bool = True  # BGM の自動選曲を有効にする（BGM 未登録なら実質無効）
+    folder_ids: list[str] | None = None  # おまかせの在庫を「ルート ∪ 指定フォルダのサブツリー」に絞る
     # 部分再生成（テイクからの撮り直し）
     base_story_id: str | None = None  # 元テイク。mode が full 以外のとき必須
     start_position: int = 0  # この位置から生成（それ以前は元テイクからコピー）
@@ -133,6 +134,7 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
                 base_scenes=base_scenes,
                 start_position=payload.start_position,
                 mode=payload.mode,
+                folder_ids=payload.folder_ids,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except LlmError as error:

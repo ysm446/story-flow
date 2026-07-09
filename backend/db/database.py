@@ -158,6 +158,12 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             "ALTER TABLE workspaces ADD COLUMN scene_length TEXT"
             " CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL)"
         )
+    if workspace_columns and "folder_ids" not in workspace_columns:
+        conn.execute("ALTER TABLE workspaces ADD COLUMN folder_ids TEXT NOT NULL DEFAULT '[]'")
+
+    cards_column_names = {row["name"] for row in conn.execute("PRAGMA table_info(cards)")}
+    if cards_column_names and "folder_id" not in cards_column_names:
+        conn.execute("ALTER TABLE cards ADD COLUMN folder_id TEXT REFERENCES folders(id)")
 
     # cards.role の任意化（NOT NULL 制約の除去は SQLite ではテーブル再構築が必要）
     cards_columns = list(conn.execute("PRAGMA table_info(cards)"))
@@ -175,11 +181,12 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
               media_type  TEXT CHECK(media_type IN ('image','video')),
               role        TEXT CHECK(role IN ('intro','rising','turn','climax','ending') OR role IS NULL),
               tone        TEXT CHECK(tone IN ('happy','bad','bitter','neutral') OR tone IS NULL),
+              folder_id   TEXT REFERENCES folders(id),
               created_at  TEXT NOT NULL,
               updated_at  TEXT NOT NULL
             );
             INSERT INTO cards_new
-              SELECT id, title, brief, media_path, media_type, role, tone, created_at, updated_at FROM cards;
+              SELECT id, title, brief, media_path, media_type, role, tone, folder_id, created_at, updated_at FROM cards;
             DROP TABLE cards;
             ALTER TABLE cards_new RENAME TO cards;
             """

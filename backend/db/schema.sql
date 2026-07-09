@@ -1,6 +1,18 @@
 -- story-flow スキーマ（docs/spec.md §4）
 -- {EMBED_DIM} は database.py が初期化時に実次元へ置換する（Qwen3-Embedding-4B: 2560 想定）
 
+-- 4.0 folders — Vault のフォルダ階層（2026-07-10 追加）
+-- ルート（cards.folder_id IS NULL）は全作品共有の共通素材。フォルダは Compose で
+-- 「使うフォルダ」として選択制（選択はサブツリーを含む）。parent_id で無制限ネスト。
+CREATE TABLE IF NOT EXISTS folders (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  parent_id   TEXT REFERENCES folders(id),  -- NULL = トップレベル
+  sort_order  INTEGER NOT NULL DEFAULT 0,   -- 同一階層内の並び順
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
 -- 4.1 cards — シーンカード（素材）
 CREATE TABLE IF NOT EXISTS cards (
   id          TEXT PRIMARY KEY,
@@ -12,6 +24,7 @@ CREATE TABLE IF NOT EXISTS cards (
               CHECK(role IN ('intro','rising','turn','climax','ending') OR role IS NULL),
   tone        TEXT                        -- ending カードのみ意味を持つ（終点タグ）
               CHECK(tone IN ('happy','bad','bitter','neutral') OR tone IS NULL),
+  folder_id   TEXT REFERENCES folders(id),  -- NULL = ルート（全作品共有。2026-07-10 追加）
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL
 );
@@ -61,6 +74,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   target_tone       TEXT CHECK(target_tone IN ('happy','bad','bitter','neutral') OR target_tone IS NULL),
   prompt_preset_id  TEXT,               -- NULL = 既定プロンプト
   scene_length      TEXT CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL),
+  folder_ids        TEXT NOT NULL DEFAULT '[]',  -- この作品で使うフォルダ ID の JSON 配列（ルートは常時使用）
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );

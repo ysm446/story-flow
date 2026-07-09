@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IconAlert, IconFile, IconFilm } from '../../components/icons'
-import { api, cardFileUrl, type Card, type CardRole, type VaultStats } from '../../lib/api'
+import { api, cardFileUrl, type Card, type CardRole, type Folder, type VaultStats } from '../../lib/api'
 import { BgmLibrary } from './BgmLibrary'
 import { CardEditor, pickMediaFile } from './CardEditor'
+import { CARD_DRAG_MIME, FolderTree, type FolderFilter } from './FolderTree'
 
 const ROLE_LABELS: Record<CardRole, string> = {
   intro: '導入',
@@ -36,6 +37,19 @@ export function VaultPhase() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<'cards' | 'bgm'>('cards')
+  const [folders, setFolders] = useState<Folder[]>([])
+  const [rootCount, setRootCount] = useState(0)
+  const [folderFilter, setFolderFilter] = useState<FolderFilter>('all')
+
+  const loadFolders = useCallback(async () => {
+    try {
+      const result = await api.listFolders()
+      setFolders(result.folders)
+      setRootCount(result.root_count)
+    } catch {
+      // フォルダはベストエフォート（ツリーが空になるだけ）
+    }
+  }, [])
 
   const loadStats = useCallback(async () => {
     try {
@@ -52,27 +66,49 @@ export function VaultPhase() {
       const result = await api.listCards({
         q: searchMode === 'keyword' && trimmed ? trimmed : undefined,
         semantic: searchMode === 'semantic' && trimmed ? trimmed : undefined,
-        role: roleFilter || undefined
+        role: roleFilter || undefined,
+        folder: folderFilter === 'all' ? undefined : folderFilter
       })
       setCards(result.cards)
       setTotal(result.total)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
-  }, [query, searchMode, roleFilter])
+  }, [query, searchMode, roleFilter, folderFilter])
 
   useEffect(() => {
     void loadCards()
     void loadStats()
+    void loadFolders()
     // 初回 + フィルタ変更時（検索語はフォーム submit で反映）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roleFilter])
+  }, [roleFilter, folderFilter])
 
   const handleSaved = (saved: Card) => {
+    const wasNew = editing === 'new'
     setEditing(saved)
     setDroppedFile(null)
-    void loadCards()
-    void loadStats()
+    void (async () => {
+      // フォルダを開いた状態で作った新規カードは、そのフォルダに入れる
+      if (wasNew && folderFilter !== 'all' && folderFilter !== 'root') {
+        await api.assignCardFolder(saved.id, folderFilter).catch(() => undefined)
+      }
+      await loadCards()
+      await loadStats()
+      await loadFolders()
+    })()
+  }
+
+  const handleCardDropToFolder = (cardId: string, folderId: string | null) => {
+    void (async () => {
+      try {
+        await api.assignCardFolder(cardId, folderId)
+        await loadCards()
+        await loadFolders()
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    })()
   }
 
   const handleDeleted = () => {
@@ -80,6 +116,7 @@ export function VaultPhase() {
     setDroppedFile(null)
     void loadCards()
     void loadStats()
+    void loadFolders()
   }
 
   const inputClass =
@@ -109,6 +146,22 @@ export function VaultPhase() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
+          {/* フォルダツリー（ルート = 全作品共有。カードをドラッグして整理） */}
+          <aside className="w-[210px] shrink-0 border-r border-[var(--border)] bg-[var(--bg-sidebar)]">
+            <FolderTree
+              folders={folders}
+              rootCount={rootCount}
+              totalCount={stats?.total ?? 0}
+              selected={folderFilter}
+              onSelect={setFolderFilter}
+              onChanged={() => {
+                void loadFolders()
+                void loadCards()
+              }}
+              onCardDrop={handleCardDropToFolder}
+            />
+          </aside>
+
           {/* 画像/動画をドロップすると、それをメディアにした新規カードの作成を開く */}
           <div
             className="relative min-w-0 flex-1 overflow-y-auto"
@@ -237,6 +290,13 @@ export function VaultPhase() {
                 <button
                   key={card.id}
                   onClick={() => setEditing(card)}
+                  draggable
+                  onDragStart={(event) => {
+                    // フォルダツリーへのドロップで所属変更（FolderTree 側が MIME で判別）
+                    event.dataTransfer.setData(CARD_DRAG_MIME, card.id)
+                    event.dataTransfer.setData('text/plain', card.id)
+                    event.dataTransfer.effectAllowed = 'move'
+                  }}
                   className={`overflow-hidden rounded-md border text-left transition-colors ${
                     editing !== 'new' && editing?.id === card.id
                       ? 'border-[var(--accent-border)]'

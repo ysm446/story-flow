@@ -36,6 +36,7 @@ class WorkspaceUpdateInput(BaseModel):
     clear_prompt_preset: bool = False
     scene_length: Literal["short", "standard", "long"] | None = None
     clear_scene_length: bool = False
+    folder_ids: list[str] | None = None  # この作品で使うフォルダ（None = 変更なし。ルートは常時使用）
 
 
 def _now() -> str:
@@ -48,6 +49,11 @@ def _row_to_workspace(row: sqlite3.Row) -> dict:
         workspace["graph"] = json.loads(workspace["graph"])
     except (json.JSONDecodeError, TypeError):
         workspace["graph"] = dict(EMPTY_GRAPH)
+    try:
+        folder_ids = json.loads(workspace.get("folder_ids") or "[]")
+        workspace["folder_ids"] = folder_ids if isinstance(folder_ids, list) else []
+    except (json.JSONDecodeError, TypeError):
+        workspace["folder_ids"] = []
     return workspace
 
 
@@ -120,10 +126,13 @@ def update_workspace(workspace_id: str, payload: WorkspaceUpdateInput) -> dict:
             scene_length = None
         else:
             scene_length = payload.scene_length if payload.scene_length is not None else current["scene_length"]
+        folder_ids = (
+            json.dumps(payload.folder_ids) if payload.folder_ids is not None else (current["folder_ids"] or "[]")
+        )
         conn.execute(
             "UPDATE workspaces SET name = ?, graph = ?, plot = ?, target_tone = ?, prompt_preset_id = ?,"
-            " scene_length = ?, updated_at = ? WHERE id = ?",
-            (name, graph, plot, target_tone, prompt_preset_id, scene_length, _now(), workspace_id),
+            " scene_length = ?, folder_ids = ?, updated_at = ? WHERE id = ?",
+            (name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, _now(), workspace_id),
         )
         conn.commit()
         return _row_to_workspace(_get_row(conn, workspace_id))
@@ -140,8 +149,8 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
         now = _now()
         conn.execute(
             "INSERT INTO workspaces"
-            " (id, name, graph, plot, target_tone, prompt_preset_id, scene_length, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " (id, name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 new_id,
                 payload.name.strip(),
@@ -150,6 +159,7 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
                 source["target_tone"],
                 source["prompt_preset_id"],
                 source["scene_length"],
+                source["folder_ids"] or "[]",
                 now,
                 now,
             ),

@@ -24,6 +24,7 @@ import {
   type Card,
   type CardRole,
   type CardTone,
+  type Folder,
   type PromptConfig,
   type SceneLength,
   type Workspace,
@@ -31,6 +32,7 @@ import {
   type WorkspaceSummary
 } from '../../lib/api'
 import { computeChain } from '../../lib/chain'
+import { expandFolderSelection, flattenTree } from '../../lib/folders'
 import { useAppStore } from '../../store/appStore'
 
 const ROLE_LABELS: Record<CardRole, string> = {
@@ -295,6 +297,7 @@ function ComposeInner() {
   } = useAppStore()
   const [allCards, setAllCards] = useState<Card[]>([])
   const [allBgm, setAllBgm] = useState<Bgm[]>([])
+  const [allFolders, setAllFolders] = useState<Folder[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
   const [nodes, setNodes, onNodesChange] = useNodesState(composeNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(composeEdges)
@@ -320,7 +323,8 @@ function ComposeInner() {
         plot: workspace.plot,
         targetTone: workspace.target_tone ?? '',
         promptPresetId: workspace.prompt_preset_id,
-        sceneLength: workspace.scene_length ?? ''
+        sceneLength: workspace.scene_length ?? '',
+        folderIds: workspace.folder_ids ?? []
       })
       setWorkspaceId(workspace.id)
       localStorage.setItem(LAST_WORKSPACE_KEY, workspace.id)
@@ -334,15 +338,17 @@ function ComposeInner() {
     let canceled = false
     void (async () => {
       try {
-        const [cardsResult, workspacesResult, prompts, bgmResult] = await Promise.all([
+        const [cardsResult, workspacesResult, prompts, bgmResult, foldersResult] = await Promise.all([
           api.listCards(),
           api.listWorkspaces(),
           api.getPromptConfig('writer').catch(() => null),
-          api.listBgm().catch(() => ({ bgm: [] as Bgm[] }))
+          api.listBgm().catch(() => ({ bgm: [] as Bgm[] })),
+          api.listFolders().catch(() => ({ folders: [] as Folder[], root_count: 0 }))
         ])
         if (canceled) return
         setAllCards(cardsResult.cards)
         setAllBgm(bgmResult.bgm)
+        setAllFolders(foldersResult.folders)
         setPromptConfig(prompts)
         const cards = new Map(cardsResult.cards.map((card) => [card.id, card]))
 
@@ -383,14 +389,16 @@ function ComposeInner() {
     if (phase !== 'compose' || !hydrated.current) return
     void (async () => {
       try {
-        const [cardsResult, bgmResult, prompts] = await Promise.all([
+        const [cardsResult, bgmResult, prompts, foldersResult] = await Promise.all([
           api.listCards(),
           api.listBgm().catch(() => ({ bgm: [] as Bgm[] })),
-          api.getPromptConfig('writer').catch(() => null)
+          api.getPromptConfig('writer').catch(() => null),
+          api.listFolders().catch(() => null)
         ])
         setAllCards(cardsResult.cards)
         setAllBgm(bgmResult.bgm)
         if (prompts) setPromptConfig(prompts)
+        if (foldersResult) setAllFolders(foldersResult.folders)
         const fresh = new Map(cardsResult.cards.map((card) => [card.id, card]))
         // gap ノードはカードではないので削除判定の対象外
         const alive = (id: string) => id.startsWith('gap-') || fresh.has(id)
@@ -432,6 +440,7 @@ function ComposeInner() {
     return {
       graph: serializeGraph(nodes, edges),
       plot: composition.plot,
+      folder_ids: composition.folderIds,
       ...(composition.targetTone ? { target_tone: composition.targetTone as CardTone } : { clear_target_tone: true }),
       ...(composition.promptPresetId
         ? { prompt_preset_id: composition.promptPresetId }
@@ -540,7 +549,15 @@ function ComposeInner() {
   }
 
   const placedIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes])
-  const palette = allCards.filter((card) => !placedIds.has(card.id))
+  // アセット = ルート（共有）+ この作品で使うフォルダ（サブツリー含む）の未配置カード
+  const allowedFolderIds = useMemo(
+    () => expandFolderSelection(allFolders, composition.folderIds),
+    [allFolders, composition.folderIds]
+  )
+  const palette = allCards.filter(
+    (card) =>
+      !placedIds.has(card.id) && (card.folder_id === null || allowedFolderIds.has(card.folder_id))
+  )
   const chain = useMemo(() => computeChain(nodes, edges), [nodes, edges])
   const selectedNode = nodes.find((node) => node.selected)
   const selectedNodeData = selectedNode ? (selectedNode.data as unknown as AnchorNodeData) : null
@@ -1044,6 +1061,44 @@ function ComposeInner() {
               ))}
             </select>
           </label>
+
+          {allFolders.length > 0 && (
+            <div className="block">
+              <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
+                使うフォルダ（ルートの素材は常に使用。選択はサブフォルダも含む）
+              </span>
+              <div className="max-h-44 space-y-0.5 overflow-y-auto rounded border border-[var(--border-strong)] bg-[var(--bg-input)] p-1.5">
+                {flattenTree(allFolders).map(({ folder, depth }) => (
+                  <label
+                    key={folder.id}
+                    style={{ paddingLeft: 4 + depth * 14 }}
+                    className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={composition.folderIds.includes(folder.id)}
+                      onChange={(event) =>
+                        setComposition({
+                          ...composition,
+                          folderIds: event.target.checked
+                            ? [...composition.folderIds, folder.id]
+                            : composition.folderIds.filter((id) => id !== folder.id)
+                        })
+                      }
+                      className="accent-[var(--accent)]"
+                    />
+                    <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                    {folder.card_count > 0 && (
+                      <span className="text-[10px] text-[var(--text-faint)]">{folder.card_count}</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+              <span className="mt-1 block text-[11px] text-[var(--text-faint)]">
+                おまかせスロットの選定と下のアセット一覧が、ルート + 選択フォルダに絞られます
+              </span>
+            </div>
+          )}
 
           {promptConfig && (
             <label className="block">

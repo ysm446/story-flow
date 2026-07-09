@@ -44,6 +44,19 @@ class CardInput(BaseModel):
     tags: list[TagInput] = Field(default_factory=list)
 
 
+class CardFolderInput(BaseModel):
+    folder_id: str | None = None  # None = ルート（全作品共有）へ
+
+
+def _validated_folder_id(conn: sqlite3.Connection, folder_id: str | None) -> str | None:
+    if folder_id is None:
+        return None
+    row = conn.execute("SELECT id FROM folders WHERE id = ?", (folder_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="folder not found")
+    return folder_id
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -219,18 +232,27 @@ def list_cards(
     place: str | None = None,
     time: str | None = None,
     mood: str | None = None,
+    folder: str | None = None,
     limit: int = 200,
     offset: int = 0,
 ) -> dict:
-    """一覧/検索。q=FTS、semantic=ベクトル、role/place/time/mood=フィルタ。"""
+    """一覧/検索。q=FTS、semantic=ベクトル、role/place/time/mood/folder=フィルタ。
+
+    folder: 省略 = 全部、"root" = ルート（folder_id IS NULL）、それ以外 = そのフォルダ直下。
+    """
     conn = get_connection()
     try:
-        # 1. role / タグでフィルタした許可 ID 集合
+        # 1. role / タグ / フォルダでフィルタした許可 ID 集合
         sql = "SELECT id FROM cards WHERE 1=1"
         params: list = []
         if role:
             sql += " AND role = ?"
             params.append(role)
+        if folder == "root":
+            sql += " AND folder_id IS NULL"
+        elif folder:
+            sql += " AND folder_id = ?"
+            params.append(folder)
         for tag_type, value in (("place", place), ("time", time), ("mood", mood)):
             if value:
                 sql += " AND id IN (SELECT card_id FROM card_tags WHERE tag_type = ? AND value = ?)"
@@ -320,6 +342,23 @@ def update_card(card_id: str, payload: CardInput) -> dict:
         _refresh_fts(conn, card_id, payload.title, payload.brief)
         if embedding is not None:
             _store_embedding(conn, card_id, embedding)
+        conn.commit()
+        return _card_response(conn, _get_card_row(conn, card_id))
+    finally:
+        conn.close()
+
+
+@router.post("/cards/{card_id}/folder")
+def assign_card_folder(card_id: str, payload: CardFolderInput) -> dict:
+    """カードのフォルダ所属を変更する（None = ルートへ）。"""
+    conn = get_connection()
+    try:
+        _get_card_row(conn, card_id)
+        folder_id = _validated_folder_id(conn, payload.folder_id)
+        conn.execute(
+            "UPDATE cards SET folder_id = ?, updated_at = ? WHERE id = ?",
+            (folder_id, _now(), card_id),
+        )
         conn.commit()
         return _card_response(conn, _get_card_row(conn, card_id))
     finally:
