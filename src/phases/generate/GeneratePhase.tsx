@@ -15,6 +15,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { IconFilm, IconGrid, IconMusic, IconRotate, IconTrash } from '../../components/icons'
 import { api, cardFileUrl, type Bgm, type Card, type GenerateEvent, type StorySummary } from '../../lib/api'
+import { chainAnchors } from '../../lib/chain'
 import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
 import { useUiSettings } from '../../store/settings'
@@ -166,7 +167,8 @@ export function GeneratePhase() {
 }
 
 function GenerateInner() {
-  const { composition, setPhase, pendingGenerate, setPendingGenerate, workspaceId, composeNodes } = useAppStore()
+  const { composition, phase, setPhase, pendingGenerate, setPendingGenerate, workspaceId, composeNodes, composeEdges } =
+    useAppStore()
   const { settings: uiSettings } = useUiSettings()
   const [allCards, setAllCards] = useState<Card[]>([])
   const [allBgm, setAllBgm] = useState<Bgm[]>([])
@@ -177,12 +179,18 @@ function GenerateInner() {
   const [error, setError] = useState<string | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
-  const autoStarted = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
   const reactFlow = useReactFlow()
+
+  // アンマウント（実質アプリ終了）時に進行中のストリームを畳む
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
   const bgmTitleById = useMemo(() => new Map(allBgm.map((bgm) => [bgm.id, bgm.title])), [allBgm])
   const isRunning = status === 'starting-model' || status === 'generating'
+  // アンカー列は常に「いまの Compose グラフ」から導出する（一本鎖が未成立なら null）。
+  // スナップショットを持ち回ると、Compose での編集後に古い構成で生成される事故になる
+  const anchors = useMemo(() => chainAnchors(composeNodes, composeEdges), [composeNodes, composeEdges])
 
   const refreshTakes = useCallback(async () => {
     if (!workspaceId) return
@@ -240,10 +248,10 @@ function GenerateInner() {
 
   const runGeneration = async (options: { baseStoryId: string | null; startPosition: number; mode: 'full' | RegenMode }) => {
     if (isRunning) return
-    // スロット列: full は Compose の構成、部分再生成は表示中テイクのカード列
+    // スロット列: full は Compose のグラフから導出した鎖、部分再生成は表示中テイクのカード列
     const slotCards =
       options.mode === 'full'
-        ? composition.anchors.map((anchor) => ({
+        ? (anchors ?? []).map((anchor) => ({
             cardId: anchor.cardId,
             instruction: anchor.instruction,
             bgmId: anchor.bgmId
@@ -278,6 +286,10 @@ function GenerateInner() {
       }
 
       setStatus('generating')
+      // done / error イベントを受けずにストリームが閉じた場合を成功と誤認しないための追跡
+      let sawTerminalEvent = false
+      const controller = new AbortController()
+      abortRef.current = controller
       await postSse<GenerateEvent>(
         '/generate',
         {
@@ -321,19 +333,26 @@ function GenerateInner() {
               )
             )
           } else if (event.type === 'done') {
+            sawTerminalEvent = true
             setCurrentTakeId(event.story_id)
             setStatus('done')
             void refreshTakes()
           } else {
+            sawTerminalEvent = true
             setError(event.message)
             setStatus('error')
           }
-        }
+        },
+        controller.signal
       )
-      setStatus((prev) => (prev === 'generating' ? 'done' : prev))
+      if (!sawTerminalEvent) {
+        throw new Error('生成が完了する前に接続が切れました。テイクは保存されていません。')
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
       setStatus('error')
+    } finally {
+      abortRef.current = null
     }
   }
 
@@ -343,18 +362,25 @@ function GenerateInner() {
       void runGeneration({ baseStoryId: currentTakeId, startPosition: index, mode })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentTakeId, sceneViews, isRunning, composition, workspaceId, composeNodes, cardById]
+    [currentTakeId, sceneViews, isRunning, composition, workspaceId, composeNodes, cardById, uiSettings, anchors]
   )
 
-  // Compose の「生成する」からの遷移なら自動開始
+  // Compose の「生成する」からの遷移なら自動開始（常時マウントのため、来るたびに消費する）
   useEffect(() => {
-    if (pendingGenerate && !autoStarted.current) {
-      autoStarted.current = true
-      setPendingGenerate(false)
-      void runGeneration({ baseStoryId: null, startPosition: 0, mode: 'full' })
-    }
+    if (!pendingGenerate) return
+    setPendingGenerate(false)
+    void runGeneration({ baseStoryId: null, startPosition: 0, mode: 'full' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingGenerate])
+
+  // タブが表示されたらカード / BGM / テイク一覧を再取得する（常時マウントのため、
+  // マウント時の初期化だけでは Vault での追加や Theater での削除に追随できない）
+  useEffect(() => {
+    if (phase !== 'generate') return
+    void api.listCards().then((result) => setAllCards(result.cards)).catch(() => undefined)
+    void api.listBgm().then((result) => setAllBgm(result.bgm)).catch(() => undefined)
+    void refreshTakes()
+  }, [phase, refreshTakes])
 
   const handleDeleteTake = async (take: StorySummary) => {
     if (!window.confirm('このテイクを削除しますか？')) return
@@ -446,7 +472,7 @@ function GenerateInner() {
           <h1 className="text-[15px] font-semibold">Generate — 生成</h1>
           <button
             onClick={() => void runGeneration({ baseStoryId: null, startPosition: 0, mode: 'full' })}
-            disabled={isRunning || composition.anchors.length === 0}
+            disabled={isRunning || !anchors || anchors.length === 0}
             className="w-full rounded bg-[var(--accent)] px-4 py-2 text-[13px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {status === 'starting-model'
@@ -455,9 +481,9 @@ function GenerateInner() {
                 ? '生成中…'
                 : '新しいテイクを生成'}
           </button>
-          {composition.anchors.length === 0 && (
+          {(!anchors || anchors.length === 0) && (
             <div className="text-[11px] text-[var(--text-faint)]">
-              構成がありません。
+              {composeNodes.length > 0 ? '構成が一本の鎖になっていません。' : '構成がありません。'}
               <button onClick={() => setPhase('compose')} className="text-[var(--accent)] hover:underline">
                 Compose で組む →
               </button>

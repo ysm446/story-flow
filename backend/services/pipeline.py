@@ -155,6 +155,13 @@ def save_story(
     """
     conn = get_connection()
     try:
+        # 生成には数分かかるため、その間に参照先（BGM / ワークスペース / 元テイク）が
+        # 削除されている可能性がある。外部キー違反で生成結果が丸ごと失われないよう、
+        # 保存直前に存在を再確認し、消えた参照は NULL に落とす
+        workspace_id = _existing_id(conn, "workspaces", workspace_id)
+        parent_story_id = _existing_id(conn, "stories", parent_story_id)
+        valid_bgm_ids = _existing_bgm_ids(conn, scenes)
+
         story_id = str(uuid.uuid4())
         conn.execute(
             "INSERT INTO stories (id, plot, target_tone, workspace_id, parent_story_id, created_at)"
@@ -175,10 +182,27 @@ def save_story(
                     1 if scene["is_fixed"] else 0,
                     scene["selection_reason"],
                     json.dumps(scene["state_after"], ensure_ascii=False),
-                    scene.get("bgm_id"),
+                    scene.get("bgm_id") if scene.get("bgm_id") in valid_bgm_ids else None,
                 ),
             )
         conn.commit()
         return story_id
     finally:
         conn.close()
+
+
+def _existing_id(conn, table: str, row_id: str | None) -> str | None:
+    """行が存在すれば ID をそのまま、消えていれば None を返す（table は内部固定値のみ）。"""
+    if row_id is None:
+        return None
+    row = conn.execute(f"SELECT id FROM {table} WHERE id = ?", (row_id,)).fetchone()
+    return row_id if row is not None else None
+
+
+def _existing_bgm_ids(conn, scenes: list[dict]) -> set[str]:
+    bgm_ids = {scene.get("bgm_id") for scene in scenes if scene.get("bgm_id")}
+    if not bgm_ids:
+        return set()
+    placeholders = ",".join("?" * len(bgm_ids))
+    rows = conn.execute(f"SELECT id FROM bgm WHERE id IN ({placeholders})", tuple(bgm_ids)).fetchall()
+    return {row["id"] for row in rows}

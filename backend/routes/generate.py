@@ -51,7 +51,14 @@ def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
             row = conn.execute("SELECT * FROM cards WHERE id = ?", (slot.card_id,)).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail=f"card not found: {slot.card_id}")
-            slots.append({"card": dict(row), "instruction": slot.instruction, "bgm_id": slot.bgm_id})
+            # 削除済み BGM の指名（workspace graph に残った参照）は自動選曲に劣化させる。
+            # そのまま通すと全シーン生成後の save_story が外部キー違反で全損する
+            bgm_id = slot.bgm_id
+            if bgm_id is not None:
+                bgm_row = conn.execute("SELECT id FROM bgm WHERE id = ?", (bgm_id,)).fetchone()
+                if bgm_row is None:
+                    bgm_id = None
+            slots.append({"card": dict(row), "instruction": slot.instruction, "bgm_id": bgm_id})
         return slots
     finally:
         conn.close()

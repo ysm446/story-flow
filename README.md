@@ -7,7 +7,8 @@
 左から 1 シーンずつ清書して一本の物語に仕立て、それを鑑賞する。
 同じ素材から毎回すこしずつ違う短編が生まれる**リプレイ性**が面白さの核。
 
-> **状態**: フェーズ 0（足場）完了。v1 実装中。詳細は [docs/plan/progress.md](docs/plan/progress.md)。
+> **状態**: v1 の 4 フェーズ（Vault / Compose / Generate / Theater）実装済み。
+> 通し確認・調整と v1.5（穴埋め）が次。詳細は [docs/plan/progress.md](docs/plan/progress.md)。
 
 ## 4 つのフェーズ
 
@@ -34,11 +35,15 @@
 electron/     Electron main プロセス（llama-server の導入・起動管理を含む）
 src/          renderer（phases/{vault,compose,generate,theater}）
 backend/      FastAPI（routes / services / prompts / db）
-data/library/ ライブラリ（DB + メディア + サムネイル。DB にはパスのみ保存）※コミット対象外
+data/         マシン設定（settings.json。ライブラリの場所 + UI 設定）※コミット対象外
 models/       GGUF モデル置き場 ※コミット対象外
 runtime/      llama-server 実行環境。UI のインストーラで導入 ※コミット対象外
 docs/         仕様・計画・ルール
 ```
+
+ライブラリ（DB + メディア + サムネイル + BGM + プロンプト）は**任意のフォルダ**に置ける。
+起動時の UI で「新規作成 / ライブラリを開く」を選び、場所は `data/settings.json` に永続化される。
+フォルダごとコピーすればバックアップ・共有になる。
 
 ## 起動
 

@@ -20,6 +20,12 @@ SELECTOR_BASE_URL = os.environ.get("STORY_FLOW_SELECTOR_URL", WRITER_BASE_URL)
 LLM_TIMEOUT_SECONDS = 600.0
 MAX_JSON_RETRIES = 2
 
+# 思考モード（reasoning/thinking）の無効化。サーバ起動引数（--reasoning off 等）でも
+# 無効化しているが、手動起動サーバなど引数が効いていない接続先に備えてリクエスト側でも
+# 指定する。llama.cpp はテンプレート変数として渡し、未対応サーバは未知フィールドとして
+# 無視する（thinking は汎用、enable_thinking は Qwen3 系テンプレートが参照）
+NO_THINKING_TEMPLATE_KWARGS = {"thinking": False, "enable_thinking": False}
+
 
 class LlmError(RuntimeError):
     """LLM 呼び出しの失敗（接続不可・出力パース不能）。"""
@@ -138,6 +144,7 @@ def chat_completion_json_stream(
         "messages": messages,
         "temperature": temperature,
         "response_format": {"type": "json_object"},
+        "chat_template_kwargs": NO_THINKING_TEMPLATE_KWARGS,
         "stream": True,
     }
     extractor = _ProseStreamExtractor()
@@ -217,6 +224,7 @@ def _chat_completion(base_url: str, messages: list[dict], temperature: float) ->
         "messages": messages,
         "temperature": temperature,
         "response_format": {"type": "json_object"},
+        "chat_template_kwargs": NO_THINKING_TEMPLATE_KWARGS,
     }
     try:
         response = httpx.post(
@@ -225,8 +233,9 @@ def _chat_completion(base_url: str, messages: list[dict], temperature: float) ->
             timeout=LLM_TIMEOUT_SECONDS,
         )
         if response.status_code == 400:
-            # response_format 未対応ビルドへのフォールバック
+            # response_format / chat_template_kwargs 未対応ビルドへのフォールバック
             payload.pop("response_format", None)
+            payload.pop("chat_template_kwargs", None)
             response = httpx.post(
                 f"{base_url.rstrip('/')}/v1/chat/completions",
                 json=payload,

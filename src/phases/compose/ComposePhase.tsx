@@ -30,6 +30,7 @@ import {
   type WorkspaceGraph,
   type WorkspaceSummary
 } from '../../lib/api'
+import { computeChain } from '../../lib/chain'
 import { useAppStore } from '../../store/appStore'
 
 const ROLE_LABELS: Record<CardRole, string> = {
@@ -186,32 +187,6 @@ function AnchorNode({ data, selected }: NodeProps) {
 
 const nodeTypes = { anchor: AnchorNode }
 
-/** エッジ列から一本鎖の並び順を求める。成立しなければ理由を返す */
-function computeChain(nodes: Node[], edges: Edge[]): { orderedIds: string[] | null; reason: string | null } {
-  if (nodes.length === 0) return { orderedIds: null, reason: 'カードを置いてください' }
-  if (nodes.length === 1) return { orderedIds: [nodes[0].id], reason: null }
-
-  const nextOf = new Map(edges.map((edge) => [edge.source, edge.target]))
-  const hasIncoming = new Set(edges.map((edge) => edge.target))
-  const starts = nodes.filter((node) => !hasIncoming.has(node.id))
-
-  if (starts.length !== 1) {
-    return { orderedIds: null, reason: 'すべてのカードを一本の線で繋いでください（始点が複数あります）' }
-  }
-  const ordered: string[] = []
-  let current: string | undefined = starts[0].id
-  const seen = new Set<string>()
-  while (current && !seen.has(current)) {
-    seen.add(current)
-    ordered.push(current)
-    current = nextOf.get(current)
-  }
-  if (ordered.length !== nodes.length) {
-    return { orderedIds: null, reason: `繋がっていないカードが ${nodes.length - ordered.length} 枚あります` }
-  }
-  return { orderedIds: ordered, reason: null }
-}
-
 /** ワークスペースの graph（ID + 座標 + 指示文）を、実在するカードで React Flow ノードに復元する */
 function hydrateGraph(graph: WorkspaceGraph, cardById: Map<string, Card>): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
@@ -249,6 +224,7 @@ function ComposeInner() {
   const {
     composition,
     setComposition,
+    phase,
     setPhase,
     workspaceId,
     setWorkspaceId,
@@ -281,7 +257,6 @@ function ComposeInner() {
       setNodes(nextNodes)
       setEdges(nextEdges)
       setComposition({
-        anchors: [],
         plot: workspace.plot,
         targetTone: workspace.target_tone ?? '',
         promptPresetId: workspace.prompt_preset_id,
@@ -335,11 +310,50 @@ function ComposeInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // store へキャッシュ（タブ切替対策）
+  // store へキャッシュ（Generate がアンカー列の導出に使う）
   useEffect(() => {
     setComposeGraph(nodes, edges)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges])
+
+  // タブが表示されたらアセット類を再取得する（常時マウントのため、マウント時の初期化だけでは
+  // Vault でのカード追加・編集・削除やプリセット変更に追随できない）。グラフは再ハイドレート
+  // せず、既存ノードのカード情報だけ更新し、削除済みカードのノードは落とす
+  useEffect(() => {
+    if (phase !== 'compose' || !hydrated.current) return
+    void (async () => {
+      try {
+        const [cardsResult, bgmResult, prompts] = await Promise.all([
+          api.listCards(),
+          api.listBgm().catch(() => ({ bgm: [] as Bgm[] })),
+          api.getPromptConfig('writer').catch(() => null)
+        ])
+        setAllCards(cardsResult.cards)
+        setAllBgm(bgmResult.bgm)
+        if (prompts) setPromptConfig(prompts)
+        const fresh = new Map(cardsResult.cards.map((card) => [card.id, card]))
+        setNodes((prev) => {
+          const next = prev
+            .filter((node) => fresh.has(node.id))
+            .map((node) => {
+              const data = node.data as unknown as AnchorNodeData
+              const card = fresh.get(node.id)!
+              return data.card.updated_at === card.updated_at ? node : { ...node, data: { ...data, card } }
+            })
+          const unchanged = next.length === prev.length && next.every((node, i) => node === prev[i])
+          return unchanged ? prev : next
+        })
+        setEdges((prev) => {
+          const next = prev.filter((edge) => fresh.has(edge.source) && fresh.has(edge.target))
+          return next.length === prev.length ? prev : next
+        })
+        void refreshWorkspaces()
+      } catch {
+        // ベストエフォート（次の表示時に再試行される）
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
 
   // 「⋯」メニューは Escape で閉じる
   useEffect(() => {
@@ -517,7 +531,8 @@ function ComposeInner() {
     [setEdges]
   )
 
-  // 生成へ: 保存を確定してから Generate タブで自動開始
+  // 生成へ: 保存を確定してから Generate タブで自動開始。
+  // アンカー列は Generate 側が store のグラフから導出する（スナップショットを渡さない）
   const handleGenerate = async () => {
     if (!chain.orderedIds || !workspaceId) return
     try {
@@ -525,13 +540,6 @@ function ComposeInner() {
     } catch {
       // 保存失敗でも生成は続行できる（次の自動保存でリトライされる）
     }
-    const anchors = chain.orderedIds.map((cardId) => {
-      const node = nodes.find((item) => item.id === cardId)
-      const data = node ? (node.data as unknown as AnchorNodeData) : null
-      const instruction = (data?.instruction ?? '').trim()
-      return { cardId, instruction: instruction || null, bgmId: data?.bgmId ?? null }
-    })
-    setComposition({ ...composition, anchors })
     setPendingGenerate(true)
     setPhase('generate')
   }

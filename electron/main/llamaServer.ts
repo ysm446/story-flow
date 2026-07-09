@@ -218,8 +218,12 @@ export class LlamaServerManager {
       'off',
       '--reasoning-format',
       'none',
+      // スイッチを無視して思考を始めるモデル向けの強制打ち切り（0 = 即終了）
+      '--reasoning-budget',
+      '0',
+      // thinking は汎用、enable_thinking は Qwen3 系テンプレートが参照する
       '--chat-template-kwargs',
-      '{"thinking":false}',
+      '{"thinking":false,"enable_thinking":false}',
       '--n-gpu-layers',
       '999'
     ]
@@ -254,6 +258,10 @@ export class LlamaServerManager {
     const deadline = Date.now() + 90_000
     while (Date.now() < deadline) {
       if (await this.isHealthy()) return
+      if (!this.process) {
+        // モデル破損や引数非互換などで即死したときに 90 秒待たせない
+        throw new Error('llama-server exited before becoming healthy. Check [llama-server] logs.')
+      }
       await delay(1_000)
     }
     throw new Error('llama.cpp server did not become ready within 90 seconds.')
@@ -307,7 +315,7 @@ function canListen(port: number): Promise<boolean> {
   })
 }
 
-async function waitForProcessExit(proc: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
+export async function waitForProcessExit(proc: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
   if (proc.exitCode !== null) return true
   return await new Promise<boolean>((resolve) => {
     const onExit = () => {

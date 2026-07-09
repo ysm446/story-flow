@@ -116,9 +116,13 @@ def resolve_path(relative: str) -> Path:
 
 
 def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(get_db_path())
+    conn = sqlite3.connect(get_db_path(), timeout=15.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # 併走する書き込み（生成結果の保存 / Compose の自動保存 / 埋め込み upsert）が
+    # "database is locked" にならないよう、WAL + busy_timeout で待ち合わせる
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 15000")
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)

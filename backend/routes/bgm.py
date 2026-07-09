@@ -63,25 +63,31 @@ def _refresh_fts(conn: sqlite3.Connection, bgm_id: str, title: str, description:
     )
 
 
-def _refresh_embedding(conn: sqlite3.Connection, bgm_id: str, description: str) -> bool:
-    """説明文の埋め込みを bgm_vec に upsert する。失敗しても保存は続行する。"""
-    conn.execute("DELETE FROM bgm_vec WHERE bgm_id = ?", (bgm_id,))
+def _compute_embedding(description: str) -> bytes | None:
+    """説明文の埋め込みを計算する。空・失敗時は None（保存は続行する）。
+
+    HTTP 呼び出しで時間がかかるため、必ず書き込みトランザクションの**外**で呼ぶこと
+    （書き込みロックを持ったまま待つと併走する保存が database is locked になる）。
+    """
     text = description.strip()
     if not text:
-        return False  # 説明が空なら埋め込まない
+        return None  # 説明が空なら埋め込まない
     try:
         vector = embed_text(text)
     except EmbeddingUnavailable as error:
-        print(f"[bgm] embedding skipped for {bgm_id}: {error}")
-        return False
+        print(f"[bgm] embedding skipped: {error}")
+        return None
     if len(vector) != EMBED_DIM:
         print(f"[bgm] embedding dim mismatch: got {len(vector)}, expected {EMBED_DIM}")
-        return False
-    conn.execute(
-        "INSERT INTO bgm_vec (bgm_id, embedding) VALUES (?, ?)",
-        (bgm_id, serialize_float32(vector)),
-    )
-    return True
+        return None
+    return serialize_float32(vector)
+
+
+def _store_embedding(conn: sqlite3.Connection, bgm_id: str, embedding: bytes | None) -> None:
+    """bgm_vec を upsert する（None なら削除のみ = 埋め込み無し状態にする）。"""
+    conn.execute("DELETE FROM bgm_vec WHERE bgm_id = ?", (bgm_id,))
+    if embedding is not None:
+        conn.execute("INSERT INTO bgm_vec (bgm_id, embedding) VALUES (?, ?)", (bgm_id, embedding))
 
 
 def _fts_match_expression(query: str) -> str:
@@ -129,6 +135,7 @@ def list_bgm(q: str | None = None, semantic: str | None = None, limit: int = 200
 
 @router.post("/bgm", status_code=201)
 def create_bgm(payload: BgmInput) -> dict:
+    embedding = _compute_embedding(payload.description)  # トランザクション外で先に計算
     conn = get_connection()
     try:
         bgm_id = str(uuid.uuid4())
@@ -139,7 +146,7 @@ def create_bgm(payload: BgmInput) -> dict:
             (bgm_id, payload.title, payload.description, now, now),
         )
         _refresh_fts(conn, bgm_id, payload.title, payload.description)
-        _refresh_embedding(conn, bgm_id, payload.description)
+        _store_embedding(conn, bgm_id, embedding)
         conn.commit()
         return _bgm_response(conn, _get_bgm_row(conn, bgm_id))
     finally:
@@ -161,13 +168,16 @@ def update_bgm(bgm_id: str, payload: BgmInput) -> dict:
     try:
         current = _get_bgm_row(conn, bgm_id)
         description_changed = current["description"] != payload.description
+        # 説明変更時のみ再埋め込み。計算（HTTP）は書き込みの前 = トランザクション外で済ませる
+        needs_embedding = description_changed or not _has_embedding(conn, bgm_id)
+        embedding = _compute_embedding(payload.description) if needs_embedding else None
         conn.execute(
             "UPDATE bgm SET title = ?, description = ?, updated_at = ? WHERE id = ?",
             (payload.title, payload.description, _now(), bgm_id),
         )
         _refresh_fts(conn, bgm_id, payload.title, payload.description)
-        if description_changed or not _has_embedding(conn, bgm_id):
-            _refresh_embedding(conn, bgm_id, payload.description)
+        if needs_embedding:
+            _store_embedding(conn, bgm_id, embedding)
         conn.commit()
         return _bgm_response(conn, _get_bgm_row(conn, bgm_id))
     finally:

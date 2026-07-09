@@ -28,20 +28,25 @@ export async function postSse<TEvent>(
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
 
-    let separatorIndex: number
-    while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
-      const chunk = buffer.slice(0, separatorIndex)
-      buffer = buffer.slice(separatorIndex + 2)
-      for (const line of chunk.split('\n')) {
-        if (line.startsWith('data: ')) {
-          onEvent(JSON.parse(line.slice(6)) as TEvent)
+      let separatorIndex: number
+      while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+        const chunk = buffer.slice(0, separatorIndex)
+        buffer = buffer.slice(separatorIndex + 2)
+        for (const line of chunk.split('\n')) {
+          if (line.startsWith('data: ')) {
+            onEvent(JSON.parse(line.slice(6)) as TEvent)
+          }
         }
       }
     }
+  } finally {
+    // onEvent が throw した場合などに接続を掴んだままにしない
+    void reader.cancel().catch(() => undefined)
   }
 }

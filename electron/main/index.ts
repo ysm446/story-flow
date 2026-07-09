@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -15,6 +16,55 @@ let backend: BackendManager | null = null
 let llamaInstallController: AbortController | null = null
 let stopResourcePolling: (() => void) | null = null
 let uiSettingsPath: string | null = null
+
+// 二重起動の禁止。2 つ目のインスタンスは llama / embedding をもう 1 セット起動して
+// VRAM を消費し、片方を閉じると共有 backend が落ちるため。孤児プロセス回収の前提でもある
+// （lock を持っている限り、runtime/ 配下の llama-server.exe の持ち主は自分以外にいない）
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) {
+  app.quit()
+}
+
+app.on('second-instance', () => {
+  const window = BrowserWindow.getAllWindows()[0]
+  if (window) {
+    if (window.isMinimized()) window.restore()
+    window.focus()
+  }
+})
+
+/**
+ * 前回の異常終了（クラッシュ・強制終了・シャットダウン）で残った llama-server.exe を回収する。
+ * Windows は親プロセスが死んでも子が終了しないため、残った孤児がポートを塞ぎ、
+ * 次回起動でサーバが増殖して VRAM を二重消費する。
+ * 実行パスが runtime/ 配下のプロセスだけを対象にする（ユーザーが別途動かしている
+ * llama-server には触れない）。single instance lock 取得後に呼ぶこと。
+ */
+async function killOrphanLlamaServers(runtimeDir: string): Promise<void> {
+  if (process.platform !== 'win32') return
+  const dir = runtimeDir.replace(/'/g, "''")
+  const script =
+    `Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" | ` +
+    `Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith('${dir}', [System.StringComparison]::OrdinalIgnoreCase) } | ` +
+    `ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`
+  await new Promise<void>((done) => {
+    const killer = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      windowsHide: true
+    })
+    const timer = setTimeout(() => {
+      killer.kill()
+      done()
+    }, 10_000)
+    killer.once('exit', () => {
+      clearTimeout(timer)
+      done()
+    })
+    killer.once('error', () => {
+      clearTimeout(timer)
+      done()
+    })
+  })
+}
 
 function getLlamaServer(): LlamaServerManager {
   if (!llamaServer) throw new Error('Llama server manager is not initialized yet.')
@@ -77,9 +127,13 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) return
   const rootDir = resolveAppRoot()
   uiSettingsPath = join(rootDir, 'data', 'settings.json')
   llamaServer = new LlamaServerManager()
+  // 孤児の回収はポート探索（embeddingServer.init）より前に行う。
+  // 残存プロセスがポートを塞いだままだと探索結果がずれて増殖の起点になる
+  await killOrphanLlamaServers(llamaServer.getRuntimeDir())
   embeddingServer = new EmbeddingServerManager(rootDir)
   // 埋め込みサーバのポートを確定させてからバックエンドに URL を注入する
   await embeddingServer.init()
@@ -99,12 +153,25 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('window-all-closed', async () => {
+// 終了時の子プロセス後始末。window-all-closed 以外の終了経路（app.quit() や
+// OS からの終了要求）でも必ず一度だけ通るよう will-quit にもフックする
+let childrenShutDown = false
+async function shutdownChildren(): Promise<void> {
+  if (childrenShutDown) return
+  childrenShutDown = true
   stopResourcePolling?.()
-  if (llamaServer) await llamaServer.stop()
-  if (embeddingServer) await embeddingServer.stop()
-  if (backend) await backend.stop()
+  await Promise.allSettled([llamaServer?.stop(), embeddingServer?.stop(), backend?.stop()])
+}
+
+app.on('window-all-closed', async () => {
+  await shutdownChildren()
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('will-quit', (event) => {
+  if (childrenShutDown) return
+  event.preventDefault()
+  void shutdownChildren().finally(() => app.quit())
 })
 
 function registerIpc(): void {

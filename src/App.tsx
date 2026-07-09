@@ -224,8 +224,16 @@ function AppShell() {
       <div className="flex min-h-0 flex-1">
         <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--bg)]">
           {phase === 'vault' && <VaultPhase />}
-          {phase === 'compose' && <ComposePhase />}
-          {phase === 'generate' && <GeneratePhase />}
+          {/* Compose / Generate は常時マウント（表示だけ切替）。
+              Compose: アンマウントでデバウンス中の自動保存が flush されず編集が消えるため。
+              Generate: アンマウントすると生成中の SSE が画面から切り離されて見えなくなり、
+              二重生成もできてしまうため */}
+          <div className={phase === 'compose' ? 'h-full' : 'hidden'}>
+            <ComposePhase />
+          </div>
+          <div className={phase === 'generate' ? 'h-full' : 'hidden'}>
+            <GeneratePhase />
+          </div>
           {phase === 'theater' && <TheaterPhase />}
         </main>
 

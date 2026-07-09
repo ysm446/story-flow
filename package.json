@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "node scripts/electron-vite-dev.cjs",
-    "build": "tsc --noEmit && electron-vite build",
+    "build": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && electron-vite build",
     "preview": "electron-vite preview"
   },
   "dependencies": {

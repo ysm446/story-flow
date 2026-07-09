@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { waitForProcessExit } from './llamaServer'
 import type { BackendStatus } from './types'
 
 const DEFAULT_BACKEND_PORT = 8600
@@ -76,7 +77,7 @@ export class BackendManager {
     if (!proc || proc.killed || proc.exitCode !== null) return
 
     proc.kill()
-    const exited = await waitForExit(proc, 5_000)
+    const exited = await waitForProcessExit(proc, 5_000)
     if (exited || !proc.pid) return
 
     const killer = spawn('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true })

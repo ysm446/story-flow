@@ -6,8 +6,9 @@ export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 
 /**
  * フェーズ間で共有する状態。
- * Compose で組んだアンカー列（composition ドラフト）を Generate が読む、が中核。
- * v1 ではアンカー（カード ID の並び）のみ。GAP スロットは v1.5 で追加する。
+ * Compose のグラフ（composeNodes/composeEdges）と生成設定（composition）を Generate が読む、が中核。
+ * アンカー列はスナップショットとして持たず、Generate が生成時に src/lib/chain.ts で
+ * グラフから導出する（古いスナップショットによる生成事故を防ぐ）。
  */
 export interface CompositionAnchor {
   cardId: string
@@ -16,7 +17,6 @@ export interface CompositionAnchor {
 }
 
 export interface CompositionDraft {
-  anchors: CompositionAnchor[]
   plot: string
   targetTone: CardTone | ''
   promptPresetId: string | null
@@ -46,7 +46,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<PhaseId>('vault')
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [composition, setComposition] = useState<CompositionDraft>({
-    anchors: [],
     plot: '',
     targetTone: '',
     promptPresetId: null,

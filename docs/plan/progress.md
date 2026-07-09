@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 10:00
+更新日時: 2026-07-10 00:34
 
 ## 現在地
 
@@ -343,6 +343,43 @@ Vault → Compose → Generate → Theater が一本つながった。
   共通 startResize ヘルパー。左 180〜480 / 右 220〜520 / 高さ 90〜400 でクランプ。
   境界は見た目 1px・当たり判定は広め（透明オーバーレイ）でホバー時にアクセント色。セッション内保持）
 
+- 2026-07-10: **プロジェクト全体レビュー + 安定性修正 6 件**（backend / frontend / Electron の
+  3 領域をレビュー。spec 確定判断への違反はゼロ。検出した High 級を優先順に修正）:
+  1. `npm run build` の型チェックが no-op だった（solution-style tsconfig を `tsc --noEmit` が
+     辿らない → `tsc -p` を 2 プロジェクト個別実行に変更）。露見した実バグ
+     `backend.ts` の未定義 `waitForExit`（終了処理が実行時 ReferenceError）も修正
+  2. 生成全損の防止: 削除済み BGM の指名（workspace graph の残存参照）を生成開始時に
+     自動選曲へ劣化 + 保存直前に bgm_id / workspace_id / parent_story_id を再検証して
+     消えた参照は NULL に（生成中削除で save_story が FK 違反 → テイク全損だった）
+  3. Compose / Generate を常時マウント化（CSS 表示切替）: 生成中のタブ切替で SSE が
+     見えなくなり二重生成できた問題と、Compose のデバウンス保存がタブ切替で消える問題を
+     解消。表示時にカード/BGM/テイク等を再取得して追随。done 無しのストリーム切断を
+     成功と誤認しない終端イベント追跡も追加
+  4. アンカー列のスナップショット廃止: Generate は常に store のグラフから
+     `src/lib/chain.ts` の chainAnchors で導出（Compose 編集後に古い構成で生成される
+     事故と、作品切替後にボタンが無効化される非対称を解消）。CompositionDraft から
+     anchors を削除
+  5. Electron: single instance lock + 起動時に runtime/ 配下の孤児 llama-server.exe を
+     自動回収（異常終了 → ポート占有 → サーバ増殖で VRAM 二重消費の連鎖を遮断）+
+     will-quit フォールバック + llama waitForHealthy のプロセス死亡即時検知
+  6. DB: WAL + busy_timeout(15s) + 埋め込み計算（HTTP、最長 120 秒）を書き込み
+     トランザクション外へ（カード保存中の並行書き込みが database is locked になっていた）
+  - 検証: build（実効化した型チェック込み）/ py_compile / TestClient E2E
+    （保存時の無効参照 NULL 化・WAL 確認・カード/BGM CRUD・実埋め込みサーバでの
+    意味検索ヒット）すべて成功。アプリ実起動での通し確認は次回起動時に
+  - ドキュメント: README の状態表記・ライブラリ説明を現状に更新、spec §8/§11 に
+    実装済みルート（workspaces/bgm/prompts/library）と services を反映（Ruri 記述を削除）
+  - レビューで検出した残課題（未修正。優先度 Medium 以下）は「注意点・申し送り」参照
+
+- 2026-07-10: **LLM の思考モードを 3 層で無効化**（作者要望）:
+  - llamaServer.ts の起動引数に `--reasoning-budget 0`（強制打ち切り）を追加、
+    `--chat-template-kwargs` に `enable_thinking:false`（Qwen3 系）を追加
+    （導入済み b9918 でフラグ対応を --help で確認済み）
+  - llm.py の全リクエストに `chat_template_kwargs: {thinking:false, enable_thinking:false}`
+    を付与（手動起動サーバ対策。400 なら response_format と共に外して再試行）
+  - 既存の `<think>` 除去パーサは出力側の保険としてそのまま
+  - 検証: build / py_compile 成功。実 LLM での生成確認は次回起動時に
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）
@@ -364,6 +401,18 @@ Vault → Compose → Generate → Theater が一本つながった。
 
 ## 注意点・申し送り
 
+- 2026-07-10 レビューの残課題（Medium 以下。必要になったら着手）:
+  - ストリーミング経路（llm.py の chat_completion_json_stream）に `response_format`
+    未対応ビルドへのフォールバックがない（非ストリーミング側にはある）
+  - `resolve_path` に封じ込め検証がない（共有ライブラリの DB に悪意あるパスがあると
+    任意ファイル読み出し）。CORS 全許可 + 認証なしも同系統
+  - FTS5 が既定トークナイザのため日本語の部分語検索が効かない（trigram 化を検討）
+  - Theater: 動画シーンのレイヤークロスフェードが実質カット（非アクティブ側が即アンマウント）
+  - Compose のノードドラッグで store 更新 → アプリ全体が再レンダー（大グラフで重い）
+  - llamaInstaller: 展開失敗/キャンセル時に部分展開ディレクトリが残り、壊れたビルドが
+    選ばれ続ける。start.bat は pip install 失敗後にセットアップが恒久スキップされる
+  - cards テーブル再構築マイグレーションが非トランザクショナル
+  - scene イベントの card_title を UI が未使用（自動開始レースでタイトルが空のまま）
 - spec.md の「### 判断」ブロックは確定事項。実装時に再検討しない。
 - v1 のスコープを厳守する（GAP スロット・分岐・tone 引力は実装しない。
   ただし差し込める形の関数境界にしておく）。

@@ -98,22 +98,27 @@ def _refresh_fts(conn: sqlite3.Connection, card_id: str, title: str, brief: str)
     )
 
 
-def _refresh_embedding(conn: sqlite3.Connection, card_id: str, brief: str) -> bool:
-    """ブリーフの埋め込みを card_vec に upsert する。失敗しても保存は続行する。"""
+def _compute_embedding(brief: str) -> bytes | None:
+    """ブリーフの埋め込みを計算する。埋め込めない場合は None（保存は続行する）。
+
+    HTTP 呼び出しで時間がかかる（最長 EMBED_TIMEOUT）ため、必ず書き込み
+    トランザクションの**外**で呼ぶこと。書き込みロックを持ったまま待つと、
+    併走する保存が database is locked になる。
+    """
     try:
         vector = embed_text(brief)
     except EmbeddingUnavailable as error:
-        print(f"[vault] embedding skipped for {card_id}: {error}")
-        return False
+        print(f"[vault] embedding skipped: {error}")
+        return None
     if len(vector) != EMBED_DIM:
         print(f"[vault] embedding dim mismatch: got {len(vector)}, expected {EMBED_DIM}")
-        return False
+        return None
+    return serialize_float32(vector)
+
+
+def _store_embedding(conn: sqlite3.Connection, card_id: str, embedding: bytes) -> None:
     conn.execute("DELETE FROM card_vec WHERE card_id = ?", (card_id,))
-    conn.execute(
-        "INSERT INTO card_vec (card_id, embedding) VALUES (?, ?)",
-        (card_id, serialize_float32(vector)),
-    )
-    return True
+    conn.execute("INSERT INTO card_vec (card_id, embedding) VALUES (?, ?)", (card_id, embedding))
 
 
 def _fts_match_expression(query: str) -> str:
@@ -268,6 +273,7 @@ def list_cards(
 
 @router.post("/cards", status_code=201)
 def create_card(payload: CardInput) -> dict:
+    embedding = _compute_embedding(payload.brief)  # トランザクション外で先に計算
     conn = get_connection()
     try:
         card_id = str(uuid.uuid4())
@@ -279,7 +285,8 @@ def create_card(payload: CardInput) -> dict:
         )
         _replace_tags(conn, card_id, payload.tags)
         _refresh_fts(conn, card_id, payload.title, payload.brief)
-        _refresh_embedding(conn, card_id, payload.brief)
+        if embedding is not None:
+            _store_embedding(conn, card_id, embedding)
         conn.commit()
         return _card_response(conn, _get_card_row(conn, card_id))
     finally:
@@ -301,15 +308,18 @@ def update_card(card_id: str, payload: CardInput) -> dict:
     try:
         current = _get_card_row(conn, card_id)
         brief_changed = current["brief"] != payload.brief
+        # ブリーフ変更時のみ再埋め込み（spec §8.1）。未埋め込みならリトライを兼ねて再計算。
+        # 計算（HTTP）は書き込みの前 = トランザクション外で済ませる
+        needs_embedding = brief_changed or not _has_embedding(conn, card_id)
+        embedding = _compute_embedding(payload.brief) if needs_embedding else None
         conn.execute(
             "UPDATE cards SET title = ?, brief = ?, role = ?, tone = ?, updated_at = ? WHERE id = ?",
             (payload.title, payload.brief, payload.role, payload.tone, _now(), card_id),
         )
         _replace_tags(conn, card_id, payload.tags)
         _refresh_fts(conn, card_id, payload.title, payload.brief)
-        # ブリーフ変更時のみ再埋め込み（spec §8.1）。未埋め込みならリトライを兼ねて再計算
-        if brief_changed or not _has_embedding(conn, card_id):
-            _refresh_embedding(conn, card_id, payload.brief)
+        if embedding is not None:
+            _store_embedding(conn, card_id, embedding)
         conn.commit()
         return _card_response(conn, _get_card_row(conn, card_id))
     finally:
