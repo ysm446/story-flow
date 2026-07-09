@@ -65,6 +65,30 @@ CREATE TABLE IF NOT EXISTS workspaces (
   updated_at        TEXT NOT NULL
 );
 
+-- 4.8 bgm — BGM（音楽アセット）。カードとは独立した素材（シーンではない）。
+-- 説明文（曲の雰囲気）を埋め込み、のちにムードでベクトル検索して選曲する。
+CREATE TABLE IF NOT EXISTS bgm (
+  id           TEXT PRIMARY KEY,
+  title        TEXT NOT NULL,
+  description  TEXT NOT NULL DEFAULT '',    -- 曲の雰囲気（自由文）。これを埋め込む
+  media_path   TEXT,                        -- ライブラリルート相対（bgm/xxx.mp3）
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
+-- bgm_vec — BGM 説明文の埋め込み（sqlite-vec）
+CREATE VIRTUAL TABLE IF NOT EXISTS bgm_vec USING vec0(
+  bgm_id TEXT PRIMARY KEY,
+  embedding FLOAT[{EMBED_DIM}]
+);
+
+-- bgm_fts — BGM の全文検索（FTS5）
+CREATE VIRTUAL TABLE IF NOT EXISTS bgm_fts USING fts5(
+  bgm_id UNINDEXED,
+  title,
+  description
+);
+
 -- 4.6 story_scenes — 物語内の順序付きシーン
 CREATE TABLE IF NOT EXISTS story_scenes (
   id                TEXT PRIMARY KEY,

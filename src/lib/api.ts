@@ -222,6 +222,26 @@ export function cardFileUrl(cardId: string, thumb: boolean): string {
   return `${baseUrl}/cards/${cardId}/file?thumb=${thumb ? 1 : 0}`
 }
 
+export interface Bgm {
+  id: string
+  title: string
+  description: string
+  media_path: string | null
+  created_at: string
+  updated_at: string
+  has_embedding: boolean
+  distance?: number
+}
+
+export interface BgmInput {
+  title: string
+  description: string
+}
+
+export function bgmFileUrl(bgmId: string): string {
+  return `${baseUrl}/bgm/${bgmId}/file`
+}
+
 export interface LibraryStatus {
   open: boolean
   root: string | null
@@ -322,5 +342,32 @@ export const api = {
 
   deleteStory: (storyId: string) => request<{ ok: boolean }>(`/stories/${storyId}`, { method: 'DELETE' }),
 
-  getCard: (cardId: string) => request<Card>(`/cards/${cardId}`)
+  getCard: (cardId: string) => request<Card>(`/cards/${cardId}`),
+
+  listBgm: (params: { q?: string; semantic?: string } = {}) => {
+    const search = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      if (value) search.set(key, value)
+    }
+    const query = search.toString()
+    return request<{ bgm: Bgm[]; total: number }>(`/bgm${query ? `?${query}` : ''}`)
+  },
+
+  createBgm: (input: BgmInput) => request<Bgm>('/bgm', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateBgm: (bgmId: string, input: BgmInput) =>
+    request<Bgm>(`/bgm/${bgmId}`, { method: 'PUT', body: JSON.stringify(input) }),
+
+  deleteBgm: (bgmId: string) => request<{ ok: boolean }>(`/bgm/${bgmId}`, { method: 'DELETE' }),
+
+  uploadBgmMedia: async (bgmId: string, file: File): Promise<Bgm> => {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await fetch(`${baseUrl}/bgm/${bgmId}/media`, { method: 'POST', body: form })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { detail?: string } | null
+      throw new Error(body?.detail ?? `upload failed: ${response.status}`)
+    }
+    return (await response.json()) as Bgm
+  }
 }

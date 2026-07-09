@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IconAlert, IconFile, IconFilm } from '../../components/icons'
 import { api, cardFileUrl, type Card, type CardRole, type VaultStats } from '../../lib/api'
+import { BgmLibrary } from './BgmLibrary'
 import { CardEditor, pickMediaFile } from './CardEditor'
 
 const ROLE_LABELS: Record<CardRole, string> = {
@@ -34,6 +35,7 @@ export function VaultPhase() {
   const [droppedFile, setDroppedFile] = useState<File | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<'cards' | 'bgm'>('cards')
 
   const loadStats = useCallback(async () => {
     try {
@@ -83,11 +85,33 @@ export function VaultPhase() {
   const inputClass =
     'rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-[13px] focus:outline focus:outline-1 focus:outline-[var(--accent-border)]'
 
+  const tabClass = (active: boolean) =>
+    `rounded px-3 py-1 text-[13px] ${
+      active
+        ? 'bg-[var(--accent-soft)] text-[var(--text)] outline outline-1 outline-[var(--accent-border)]'
+        : 'text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+    }`
+
   return (
-    <div className="flex h-full">
-      {/* 画像/動画をドロップすると、それをメディアにした新規カードの作成を開く */}
-      <div
-        className="relative min-w-0 flex-1 overflow-y-auto"
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-sidebar)] px-3 py-1.5">
+        <button onClick={() => setTab('cards')} className={tabClass(tab === 'cards')}>
+          カード
+        </button>
+        <button onClick={() => setTab('bgm')} className={tabClass(tab === 'bgm')}>
+          BGM
+        </button>
+      </div>
+
+      {tab === 'bgm' ? (
+        <div className="min-h-0 flex-1">
+          <BgmLibrary />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          {/* 画像/動画をドロップすると、それをメディアにした新規カードの作成を開く */}
+          <div
+            className="relative min-w-0 flex-1 overflow-y-auto"
         onDragOver={(event) => {
           if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
             event.preventDefault()
@@ -293,6 +317,8 @@ export function VaultPhase() {
             setDroppedFile(null)
           }}
         />
+      )}
+        </div>
       )}
     </div>
   )

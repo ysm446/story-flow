@@ -66,6 +66,7 @@ def open_library(root: Path, persist: bool = True) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "media").mkdir(exist_ok=True)
     (root / "thumbs").mkdir(exist_ok=True)
+    (root / "bgm").mkdir(exist_ok=True)
     _current_root = root
     init_db()
     if persist:
@@ -90,6 +91,12 @@ def get_media_dir() -> Path:
 
 def get_thumbs_dir() -> Path:
     path = get_library_root() / "thumbs"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_bgm_dir() -> Path:
+    path = get_library_root() / "bgm"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

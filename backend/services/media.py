@@ -17,13 +17,14 @@ from pathlib import Path
 
 from PIL import Image
 
-from backend.db.database import get_media_dir, get_thumbs_dir, resolve_path, to_relative
+from backend.db.database import get_bgm_dir, get_media_dir, get_thumbs_dir, resolve_path, to_relative
 
 THUMB_MAX = 420
 THUMB_QUALITY = 88
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv", ".avi"}
+AUDIO_EXTS = {".mp3", ".m4a", ".ogg", ".oga", ".wav", ".flac", ".aac"}
 
 
 def detect_media_type(filename: str) -> str | None:
@@ -49,6 +50,18 @@ def save_media(data: bytes, original_name: str) -> tuple[str, str]:
 
     _ensure_thumbnail(dest, media_type, digest, data)
     return to_relative(dest), media_type
+
+
+def save_audio(data: bytes, original_name: str) -> str:
+    """BGM 音声を bgm/ に sha256 命名で保存し、ライブラリルート相対パスを返す。"""
+    ext = Path(original_name).suffix.lower()
+    if ext not in AUDIO_EXTS:
+        raise ValueError(f"unsupported audio type: {original_name}")
+    digest = hashlib.sha256(data).hexdigest()[:16]
+    dest = get_bgm_dir() / f"{digest}{ext}"
+    if not dest.exists():
+        dest.write_bytes(data)
+    return to_relative(dest)
 
 
 def thumb_relative_for(media_relative: str) -> str:

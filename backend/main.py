@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.db.database import LibraryNotOpen, open_library, resolve_initial_library_root
-from backend.routes import cards, generate, library, prompts, stories, workspaces
+from backend.routes import bgm, cards, generate, library, prompts, stories, workspaces
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(bgm.router)
 app.include_router(cards.router)
 app.include_router(generate.router)
 app.include_router(library.router)

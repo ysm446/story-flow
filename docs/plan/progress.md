@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 08:40
+更新日時: 2026-07-09 09:10
 
 ## 現在地
 
@@ -297,6 +297,18 @@ Vault → Compose → Generate → Theater が一本つながった。
   - 中央: ノードネットワーク（上）+ 下部にアセットエリア（未配置カードを横並び、
     クリックで配置）。旧 左サイドのカードパレットはアセットエリアへ移動
   - icons.tsx に IconMore（横三点）を追加
+- 2026-07-09: **BGM ライブラリ Phase 1**（作者要望。plan.md「項目: BGM」参照）:
+  - BGM は cards と独立したテーブル（bgm + bgm_vec + bgm_fts）。schema.sql に追加
+    （IF NOT EXISTS で既存 DB にも自動作成）。音源は bgm/ に sha256 命名で保存
+    （database.get_bgm_dir / media.save_audio、AUDIO_EXTS）
+  - backend: routes/bgm.py（CRUD / 音源アップロード・配信 / q=FTS・semantic=ベクトル検索）。
+    **曲の説明文（description）を埋め込む**（作者の意図なので spec の埋め込み原則と整合）。
+    埋め込みサーバ未起動時は has_embedding=false で劣化保存
+  - frontend: Vault にタブ（カード / BGM）。BgmLibrary.tsx（一覧 + プレビュー再生 +
+    キーワード/意味検索 + 追加/編集/削除の右パネル）。api.ts に bgm 一式、icons に IconMusic
+  - 検証: build / py_compile / TestClient E2E（作成→一覧→音源アップロード→配信→更新→
+    意味検索503〔サーバ未起動時の正常劣化〕→削除）成功
+  - Phase 2（未着手）: 候補検索→LLM選択の選曲 + Theater 連動再生 + 音量/オンオフ設定
 - 2026-07-09: Generate ノードのサムネイルを元の縦横比で表示（固定高さ + object-cover を
   やめ w-full h-auto に。サムネは元から比率保持で生成されており切れは CSS 起因だった）
 - 2026-07-09: Generate ノードの重なり緩和レイアウト（作者要望）— Compose 座標を基準に
