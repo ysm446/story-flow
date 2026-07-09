@@ -288,6 +288,9 @@ function sceneDurationMs(prose: string): number {
   return Math.min(30_000, Math.max(5_000, 4_000 + prose.length * 90))
 }
 
+// 最終シーンのフェードアウト時間（レイヤーの opacity トランジション 1.2s + 余韻）
+const THEATER_END_FADE_MS = 2_000
+
 // 縦横比の設定値 → 数値（幅 / 高さ）。auto は null = ウィンドウに合わせる
 const ASPECT_RATIO_NUM: Record<string, number | null> = {
   auto: null,
@@ -461,6 +464,7 @@ function StoryPlayer({
   const { settings: uiSettings } = useUiSettings()
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
+  const [ending, setEnding] = useState(false) // 最終シーンの暗転（フェードアウト）中
   const [finished, setFinished] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -541,24 +545,36 @@ function StoryPlayer({
     (next: number) => {
       if (next < 0) return
       if (next >= scenes.length) {
-        setFinished(true)
-        setPaused(true)
+        // 即座に終了画面を出さず、最後のコマをフェードアウトさせてから終わる
+        setEnding(true)
         return
       }
+      setEnding(false)
       setFinished(false)
       setIndex(next)
     },
     [scenes.length]
   )
 
+  // 暗転が終わったら終了画面へ（レイヤーの opacity トランジション 1.2s + 余韻）
+  useEffect(() => {
+    if (!ending) return
+    const timer = setTimeout(() => {
+      setEnding(false)
+      setFinished(true)
+      setPaused(true)
+    }, THEATER_END_FADE_MS)
+    return () => clearTimeout(timer)
+  }, [ending])
+
   // オート送り（ストリーミングが遅い設定でも文字送りが終わる前に切り替わらないようにする）
   useEffect(() => {
-    if (paused || finished || !scene) return
+    if (paused || finished || ending || !scene) return
     const streamingMs = isStreaming ? scene.prose.length * streamMsPerChar + 3_000 : 0
     const duration = Math.max(sceneDurationMs(scene.prose), streamingMs)
     const timer = setTimeout(() => goTo(index + 1), duration)
     return () => clearTimeout(timer)
-  }, [index, paused, finished, scene, goTo, isStreaming, streamMsPerChar])
+  }, [index, paused, finished, ending, scene, goTo, isStreaming, streamMsPerChar])
 
   // キーボード操作（Esc は 全画面解除 → もう一度で一覧へ の 2 段階）
   useEffect(() => {
@@ -611,7 +627,7 @@ function StoryPlayer({
     >
       {uiSettings.theaterBgmEnabled && (
         <BgmPlayer
-          bgmId={finished ? null : scene?.bgm_id ?? null}
+          bgmId={finished || ending ? null : scene?.bgm_id ?? null}
           volume={uiSettings.theaterBgmVolume}
           paused={paused}
           enabled={uiSettings.theaterBgmEnabled}
@@ -626,7 +642,7 @@ function StoryPlayer({
       {/* シーンレイヤー（クロスフェード） */}
       {scenes.map((item, i) => {
         const card = cards.get(item.card_id)
-        const isActive = i === index && !finished
+        const isActive = i === index && !finished && !ending
         return (
           <div key={item.id} className={`theater-layer ${isActive ? 'is-active' : ''}`}>
             {card?.media_path ? (
@@ -661,7 +677,11 @@ function StoryPlayer({
 
       {/* 本文（最大高を超える長文はスクロール。ストリーミング時は追従、オフ時はオート） */}
       {!finished && scene && (
-        <div key={scene.id} className="absolute inset-x-0 bottom-0 px-10 pb-14 pt-6">
+        <div
+          key={scene.id}
+          className="absolute inset-x-0 bottom-0 px-10 pb-14 pt-6 transition-opacity duration-[1200ms]"
+          style={{ opacity: ending ? 0 : 1 }}
+        >
           <div ref={textRef} className="no-scrollbar mx-auto max-h-[25vh] max-w-2xl overflow-y-auto">
             <p
               className="whitespace-pre-wrap leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]"
@@ -675,7 +695,7 @@ function StoryPlayer({
 
       {/* 終了画面 */}
       {finished && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/70">
+        <div className="theater-fadein absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/70">
           <div className="text-[22px] tracking-[0.5em] text-white/90">終</div>
           <div className="flex gap-3">
             <button

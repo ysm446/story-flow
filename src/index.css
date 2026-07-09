@@ -145,3 +145,16 @@ input[type='range'].slider:disabled::-webkit-slider-thumb {
 .theater-layer.is-active {
   opacity: 1;
 }
+
+/* Theater: 終了画面のフェードイン（最終シーンの暗転が終わってから静かに出す） */
+.theater-fadein {
+  animation: theater-fade-in 800ms ease both;
+}
+@keyframes theater-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
