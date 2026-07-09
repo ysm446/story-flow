@@ -49,6 +49,9 @@ def get_story(story_id: str) -> dict:
 def delete_story(story_id: str) -> dict:
     conn = get_connection()
     try:
+        # このテイクを元に部分再生成した子テイクの系譜リンクを外す（子は残す）。
+        # これをしないと parent_story_id の外部キー制約で削除が失敗する
+        conn.execute("UPDATE stories SET parent_story_id = NULL WHERE parent_story_id = ?", (story_id,))
         cursor = conn.execute("DELETE FROM stories WHERE id = ?", (story_id,))
         conn.commit()
         if cursor.rowcount == 0:

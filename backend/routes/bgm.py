@@ -179,6 +179,8 @@ def delete_bgm(bgm_id: str) -> dict:
     conn = get_connection()
     try:
         _get_bgm_row(conn, bgm_id)
+        # この BGM を使っている保存済みシーンの参照を外す（story_scenes.bgm_id の外部キー対策）
+        conn.execute("UPDATE story_scenes SET bgm_id = NULL WHERE bgm_id = ?", (bgm_id,))
         conn.execute("DELETE FROM bgm WHERE id = ?", (bgm_id,))
         conn.execute("DELETE FROM bgm_fts WHERE bgm_id = ?", (bgm_id,))
         conn.execute("DELETE FROM bgm_vec WHERE bgm_id = ?", (bgm_id,))

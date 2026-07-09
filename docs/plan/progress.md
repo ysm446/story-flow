@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 09:40
+更新日時: 2026-07-09 10:00
 
 ## 現在地
 
@@ -319,6 +319,14 @@ Vault → Compose → Generate → Theater が一本つながった。
     オンオフに追従、終了で停止）。設定に「BGM を再生」+「BGM の音量」を追加
   - 検証: build / py_compile / TestClient（save_story の bgm_id 永続化、resolve_bgm の
     手動優先・埋め込み無し時の継続劣化・空クエリ継続）成功。実 LLM 自動選曲は次回生成で確認
+- 2026-07-09: **修正 — テイク削除で「Failed to fetch」** が頻発する不具合。部分再生成の
+  子テイクが親を parent_story_id で参照しており、親削除時に外部キー制約違反で 500 →
+  レスポンスが返らず fetch 失敗になっていた。delete_story で子の parent_story_id を先に
+  NULL 化（子は残す）。同様に delete_bgm で使用中シーンの bgm_id を先に NULL 化。
+  TestClient で親削除→子存続・使用中 BGM 削除→シーン参照解除を確認
+- 2026-07-09: **Generate ノードに選ばれた BGM を表示**（作者要望）— SSE scene イベントに
+  bgm_id を追加、ノードヘッダ下に 🎵 + 曲名（テイク表示・生成中とも）。BGM 一覧を読み込み
+  id→タイトルで解決（削除済みは「（削除済み BGM）」）
 - 2026-07-09: Generate ノードのサムネイルを元の縦横比で表示（固定高さ + object-cover を
   やめ w-full h-auto に。サムネは元から比率保持で生成されており切れは CSS 起因だった）
 - 2026-07-09: Generate ノードの重なり緩和レイアウト（作者要望）— Compose 座標を基準に

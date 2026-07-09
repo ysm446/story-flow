@@ -198,6 +198,7 @@ export type GenerateEvent =
       is_fixed: boolean
       reused: boolean
       stale: boolean
+      bgm_id: string | null
     }
   | { type: 'done'; story_id: string }
   | { type: 'error'; message: string }

@@ -13,8 +13,8 @@ import {
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { IconFilm, IconGrid, IconRotate, IconTrash } from '../../components/icons'
-import { api, cardFileUrl, type Card, type GenerateEvent, type StorySummary } from '../../lib/api'
+import { IconFilm, IconGrid, IconMusic, IconRotate, IconTrash } from '../../components/icons'
+import { api, cardFileUrl, type Bgm, type Card, type GenerateEvent, type StorySummary } from '../../lib/api'
 import { postSse } from '../../lib/sse'
 import { useAppStore } from '../../store/appStore'
 import { useUiSettings } from '../../store/settings'
@@ -26,6 +26,7 @@ interface SceneView {
   title: string
   prose: string
   status: SceneStatus
+  bgmId: string | null
 }
 
 type RunStatus = 'idle' | 'starting-model' | 'generating' | 'done' | 'error'
@@ -36,6 +37,7 @@ interface SceneNodeData {
   index: number
   scene: SceneView
   card: Card | undefined
+  bgmTitle: string | null
   isRunning: boolean
   hasTake: boolean
   onRegenerate: (index: number, mode: RegenMode) => void
@@ -53,7 +55,7 @@ const STATUS_LABELS: Record<SceneStatus, string | null> = {
 }
 
 function SceneNode({ data }: NodeProps) {
-  const { index, scene, card, isRunning, hasTake, onRegenerate } = data as unknown as SceneNodeData
+  const { index, scene, card, bgmTitle, isRunning, hasTake, onRegenerate } = data as unknown as SceneNodeData
   const statusLabel = STATUS_LABELS[scene.status]
 
   return (
@@ -103,6 +105,15 @@ function SceneNode({ data }: NodeProps) {
           </span>
         )}
       </div>
+      {bgmTitle && (
+        <div
+          className="flex items-center gap-1.5 border-b border-[var(--border)] px-2.5 py-1 text-[10px] text-[var(--text-faint)]"
+          title={`BGM: ${bgmTitle}`}
+        >
+          <IconMusic size={11} />
+          <span className="truncate">{bgmTitle}</span>
+        </div>
+      )}
       {/* 文章の長さに合わせてノードが縦に伸びる（スクロールしない） */}
       <div className="min-h-[48px] px-2.5 py-2">
         {scene.prose ? (
@@ -158,6 +169,7 @@ function GenerateInner() {
   const { composition, setPhase, pendingGenerate, setPendingGenerate, workspaceId, composeNodes } = useAppStore()
   const { settings: uiSettings } = useUiSettings()
   const [allCards, setAllCards] = useState<Card[]>([])
+  const [allBgm, setAllBgm] = useState<Bgm[]>([])
   const [takes, setTakes] = useState<StorySummary[]>([])
   const [currentTakeId, setCurrentTakeId] = useState<string | null>(null)
   const [sceneViews, setSceneViews] = useState<SceneView[]>([])
@@ -169,6 +181,7 @@ function GenerateInner() {
   const reactFlow = useReactFlow()
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
+  const bgmTitleById = useMemo(() => new Map(allBgm.map((bgm) => [bgm.id, bgm.title])), [allBgm])
   const isRunning = status === 'starting-model' || status === 'generating'
 
   const refreshTakes = useCallback(async () => {
@@ -187,6 +200,7 @@ function GenerateInner() {
       const cards = await api.listCards().catch(() => ({ cards: [] as Card[] }))
       if (canceled) return
       setAllCards(cards.cards)
+      void api.listBgm().then((result) => !canceled && setAllBgm(result.bgm)).catch(() => undefined)
       if (!workspaceId) return
       const list = (await api.listStories(workspaceId).catch(() => ({ stories: [] as StorySummary[] }))).stories
       if (canceled) return
@@ -213,7 +227,8 @@ function GenerateInner() {
             cardId: scene.card_id,
             title: lookup.get(scene.card_id)?.title ?? '(削除済みカード)',
             prose: scene.prose,
-            status: 'done' as const
+            status: 'done' as const,
+            bgmId: scene.bgm_id
           }))
       )
       setCurrentTakeId(storyId)
@@ -244,11 +259,12 @@ function GenerateInner() {
     setError(null)
     setStatus('starting-model')
     setSceneViews(
-      slotCards.map((slot, index) => ({
+      slotCards.map((slot) => ({
         cardId: slot.cardId,
         title: cardById.get(slot.cardId)?.title ?? '',
         prose: '',
-        status: 'pending' as const
+        status: 'pending' as const,
+        bgmId: slot.bgmId ?? null
       }))
     )
 
@@ -298,7 +314,8 @@ function GenerateInner() {
                   ? {
                       ...scene,
                       prose: event.prose,
-                      status: event.stale ? 'stale' : event.reused ? 'reused' : 'done'
+                      status: event.stale ? 'stale' : event.reused ? 'reused' : 'done',
+                      bgmId: event.bgm_id
                     }
                   : scene
               )
@@ -390,6 +407,7 @@ function GenerateInner() {
             index,
             scene,
             card: cardById.get(scene.cardId),
+            bgmTitle: scene.bgmId ? bgmTitleById.get(scene.bgmId) ?? '（削除済み BGM）' : null,
             isRunning,
             hasTake: currentTakeId !== null,
             onRegenerate: handleRegenerate
@@ -398,7 +416,7 @@ function GenerateInner() {
       })
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, cardById, computeLayout])
+  }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, cardById, bgmTitleById, computeLayout])
 
   // 「整列」: ドラッグでの位置上書きを捨て、重なり緩和レイアウトに並べ直す
   const handleAlign = useCallback(() => {
