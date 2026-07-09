@@ -16,10 +16,11 @@ import {
   type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { IconFile, IconFilm, IconMore, IconPencil, IconPlus } from '../../components/icons'
+import { IconFile, IconFilm, IconMore, IconMusic, IconPencil, IconPlus } from '../../components/icons'
 import {
   api,
   cardFileUrl,
+  type Bgm,
   type Card,
   type CardRole,
   type CardTone,
@@ -128,10 +129,11 @@ export function ComposePhase() {
 interface AnchorNodeData {
   card: Card
   instruction?: string
+  bgmId?: string | null
 }
 
 function AnchorNode({ data, selected }: NodeProps) {
-  const { card, instruction } = data as unknown as AnchorNodeData
+  const { card, instruction, bgmId } = data as unknown as AnchorNodeData
   return (
     <div
       className={`w-[190px] overflow-hidden rounded-md border bg-[var(--bg-card)] ${
@@ -168,6 +170,11 @@ function AnchorNode({ data, selected }: NodeProps) {
           {instruction?.trim() && (
             <span className="text-[var(--text-dim)]" title="この作品での追加指示あり">
               <IconPencil size={10} />
+            </span>
+          )}
+          {bgmId && (
+            <span className="text-[var(--text-dim)]" title="BGM を指名">
+              <IconMusic size={10} />
             </span>
           )}
         </div>
@@ -215,7 +222,7 @@ function hydrateGraph(graph: WorkspaceGraph, cardById: Map<string, Card>): { nod
       id: item.id,
       type: 'anchor',
       position: { x: item.x, y: item.y },
-      data: { card, instruction: item.instruction ?? '' }
+      data: { card, instruction: item.instruction ?? '', bgmId: item.bgm_id ?? null }
     })
   }
   const nodeIds = new Set(nodes.map((node) => node.id))
@@ -231,7 +238,8 @@ function serializeGraph(nodes: Node[], edges: Edge[]): WorkspaceGraph {
       id: node.id,
       x: node.position.x,
       y: node.position.y,
-      instruction: ((node.data as unknown as AnchorNodeData).instruction ?? '').trim() || null
+      instruction: ((node.data as unknown as AnchorNodeData).instruction ?? '').trim() || null,
+      bgm_id: (node.data as unknown as AnchorNodeData).bgmId ?? null
     })),
     edges: edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
   }
@@ -250,6 +258,7 @@ function ComposeInner() {
     setPendingGenerate
   } = useAppStore()
   const [allCards, setAllCards] = useState<Card[]>([])
+  const [allBgm, setAllBgm] = useState<Bgm[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
   const [nodes, setNodes, onNodesChange] = useNodesState(composeNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(composeEdges)
@@ -290,13 +299,15 @@ function ComposeInner() {
     let canceled = false
     void (async () => {
       try {
-        const [cardsResult, workspacesResult, prompts] = await Promise.all([
+        const [cardsResult, workspacesResult, prompts, bgmResult] = await Promise.all([
           api.listCards(),
           api.listWorkspaces(),
-          api.getPromptConfig('writer').catch(() => null)
+          api.getPromptConfig('writer').catch(() => null),
+          api.listBgm().catch(() => ({ bgm: [] as Bgm[] }))
         ])
         if (canceled) return
         setAllCards(cardsResult.cards)
+        setAllBgm(bgmResult.bgm)
         setPromptConfig(prompts)
         const cards = new Map(cardsResult.cards.map((card) => [card.id, card]))
 
@@ -481,6 +492,12 @@ function ComposeInner() {
     )
   }
 
+  const updateNodeBgm = (nodeId: string, bgmId: string | null) => {
+    setNodes((prev) =>
+      prev.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, bgmId } } : node))
+    )
+  }
+
   // 一本鎖の制約: 出力・入力とも 1 本まで、循環は禁止
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -510,8 +527,9 @@ function ComposeInner() {
     }
     const anchors = chain.orderedIds.map((cardId) => {
       const node = nodes.find((item) => item.id === cardId)
-      const instruction = node ? ((node.data as unknown as AnchorNodeData).instruction ?? '').trim() : ''
-      return { cardId, instruction: instruction || null }
+      const data = node ? (node.data as unknown as AnchorNodeData) : null
+      const instruction = (data?.instruction ?? '').trim()
+      return { cardId, instruction: instruction || null, bgmId: data?.bgmId ?? null }
     })
     setComposition({ ...composition, anchors })
     setPendingGenerate(true)
@@ -814,6 +832,28 @@ function ComposeInner() {
                   placeholder="例: ここは回想として書く。雨の描写を引きずる。"
                   className={`${inputClass} leading-relaxed`}
                 />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
+                  BGM（自動 = LLM が雰囲気で選曲。指名すると固定）
+                </span>
+                <select
+                  value={selectedNodeData.bgmId ?? ''}
+                  onChange={(event) => updateNodeBgm(selectedNode.id, event.target.value || null)}
+                  className={inputClass}
+                >
+                  <option value="">自動（指定しない）</option>
+                  {allBgm.map((bgm) => (
+                    <option key={bgm.id} value={bgm.id}>
+                      {bgm.title}
+                    </option>
+                  ))}
+                </select>
+                {allBgm.length === 0 && (
+                  <span className="mt-1 block text-[11px] text-[var(--text-faint)]">
+                    Vault の BGM タブで曲を登録できます
+                  </span>
+                )}
               </label>
             </div>
           </div>

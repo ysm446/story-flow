@@ -12,6 +12,7 @@ export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 export interface CompositionAnchor {
   cardId: string
   instruction: string | null
+  bgmId: string | null
 }
 
 export interface CompositionDraft {

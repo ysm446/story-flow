@@ -24,6 +24,7 @@ router = APIRouter(tags=["generate"])
 class SlotInput(BaseModel):
     card_id: str
     instruction: str | None = None  # この作品でのこのシーンへの追加指示（ノードのプロパティ）
+    bgm_id: str | None = None  # このシーンの BGM 手動指名（None = 自動選曲）
 
 
 class GenerateInput(BaseModel):
@@ -35,6 +36,7 @@ class GenerateInput(BaseModel):
     prompt_preset_id: str | None = None  # ワークスペースの清書プロンプト。無効/未指定なら既定側
     scene_length: Literal["short", "standard", "long"] | None = None  # シーンの目安の長さ
     include_images: bool = False  # カードのメディアを writer に見せる（vision 対応モデル向け）
+    include_bgm: bool = True  # BGM の自動選曲を有効にする（BGM 未登録なら実質無効）
     # 部分再生成（テイクからの撮り直し）
     base_story_id: str | None = None  # 元テイク。mode が full 以外のとき必須
     start_position: int = 0  # この位置から生成（それ以前は元テイクからコピー）
@@ -49,7 +51,7 @@ def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
             row = conn.execute("SELECT * FROM cards WHERE id = ?", (slot.card_id,)).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail=f"card not found: {slot.card_id}")
-            slots.append({"card": dict(row), "instruction": slot.instruction})
+            slots.append({"card": dict(row), "instruction": slot.instruction, "bgm_id": slot.bgm_id})
         return slots
     finally:
         conn.close()
@@ -99,6 +101,7 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
                 workspace_id=payload.workspace_id,
                 scene_length=payload.scene_length,
                 include_images=payload.include_images,
+                include_bgm=payload.include_bgm,
                 base_scenes=base_scenes,
                 start_position=payload.start_position,
                 mode=payload.mode,

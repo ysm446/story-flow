@@ -228,11 +228,16 @@ function GenerateInner() {
     // スロット列: full は Compose の構成、部分再生成は表示中テイクのカード列
     const slotCards =
       options.mode === 'full'
-        ? composition.anchors.map((anchor) => ({ cardId: anchor.cardId, instruction: anchor.instruction }))
+        ? composition.anchors.map((anchor) => ({
+            cardId: anchor.cardId,
+            instruction: anchor.instruction,
+            bgmId: anchor.bgmId
+          }))
         : sceneViews.map((scene) => {
             const node = composeNodes.find((item) => item.id === scene.cardId)
-            const instruction = node ? (((node.data as Record<string, unknown>).instruction as string) ?? '').trim() : ''
-            return { cardId: scene.cardId, instruction: instruction || null }
+            const data = node ? (node.data as Record<string, unknown>) : null
+            const instruction = data ? ((data.instruction as string) ?? '').trim() : ''
+            return { cardId: scene.cardId, instruction: instruction || null, bgmId: (data?.bgmId as string) ?? null }
           })
     if (slotCards.length === 0) return
 
@@ -260,7 +265,11 @@ function GenerateInner() {
       await postSse<GenerateEvent>(
         '/generate',
         {
-          slots: slotCards.map((slot) => ({ card_id: slot.cardId, instruction: slot.instruction })),
+          slots: slotCards.map((slot) => ({
+            card_id: slot.cardId,
+            instruction: slot.instruction,
+            bgm_id: slot.bgmId ?? null
+          })),
           plot: composition.plot,
           target_tone: composition.targetTone || null,
           writer_base_url: settings.llamaBaseUrl,
@@ -268,6 +277,7 @@ function GenerateInner() {
           prompt_preset_id: composition.promptPresetId,
           scene_length: composition.sceneLength || null,
           include_images: uiSettings.generateIncludeImages && settings.supportsVision,
+          include_bgm: uiSettings.theaterBgmEnabled,
           base_story_id: options.baseStoryId,
           start_position: options.startPosition,
           mode: options.mode

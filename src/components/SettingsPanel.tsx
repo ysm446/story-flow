@@ -273,6 +273,52 @@ export function SettingsPanel({
               フェードの 2 倍より短い動画は通常ループになります
             </div>
           </div>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={settings.theaterBgmEnabled}
+              onChange={(event) => updateSettings({ theaterBgmEnabled: event.target.checked })}
+              className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="block text-[13px]">BGM を再生</span>
+              <span className="mt-0.5 block text-[12px] leading-relaxed text-[var(--text-faint)]">
+                生成時に各シーンの雰囲気に合う曲を選び（Compose で指名も可）、再生時に流します。
+                曲が変わるシーンの継ぎ目はクロスフェードします。BGM は Vault の BGM タブで登録します。
+              </span>
+            </span>
+          </label>
+          <div
+            className={`rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 ${
+              settings.theaterBgmEnabled ? '' : 'opacity-50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[13px]">BGM の音量</span>
+              <span className="font-mono text-[12px] text-[var(--text-dim)]">
+                {Math.round(settings.theaterBgmVolume * 100)}%
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={settings.theaterBgmVolume}
+                disabled={!settings.theaterBgmEnabled}
+                onChange={(event) => updateSettings({ theaterBgmVolume: Number(event.target.value) })}
+                className="slider min-w-0 flex-1"
+              />
+              <button
+                onClick={() => updateSettings({ theaterBgmVolume: 0.5 })}
+                disabled={!settings.theaterBgmEnabled || settings.theaterBgmVolume === 0.5}
+                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-0.5 text-[11px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+              >
+                リセット
+              </button>
+            </div>
+          </div>
         </section>
 
         <section>

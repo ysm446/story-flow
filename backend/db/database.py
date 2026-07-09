@@ -144,6 +144,10 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     if "parent_story_id" not in story_columns:
         conn.execute("ALTER TABLE stories ADD COLUMN parent_story_id TEXT REFERENCES stories(id)")
 
+    scene_columns = {row["name"] for row in conn.execute("PRAGMA table_info(story_scenes)")}
+    if scene_columns and "bgm_id" not in scene_columns:
+        conn.execute("ALTER TABLE story_scenes ADD COLUMN bgm_id TEXT REFERENCES bgm(id)")
+
     workspace_columns = {row["name"] for row in conn.execute("PRAGMA table_info(workspaces)")}
     if workspace_columns and "scene_length" not in workspace_columns:
         conn.execute(

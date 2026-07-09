@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-09 09:10
+更新日時: 2026-07-09 09:40
 
 ## 現在地
 
@@ -308,7 +308,17 @@ Vault → Compose → Generate → Theater が一本つながった。
     キーワード/意味検索 + 追加/編集/削除の右パネル）。api.ts に bgm 一式、icons に IconMusic
   - 検証: build / py_compile / TestClient E2E（作成→一覧→音源アップロード→配信→更新→
     意味検索503〔サーバ未起動時の正常劣化〕→削除）成功
-  - Phase 2（未着手）: 候補検索→LLM選択の選曲 + Theater 連動再生 + 音量/オンオフ設定
+- 2026-07-09: **BGM ライブラリ Phase 2**（作者要望。選定は Generate 時に確定・保存）:
+  - Compose: ノードのプロパティに「BGM（自動/指名）」セレクトを追加。無指名＝自動（LLM）、
+    指名すると固定。workspace graph の node に bgm_id を保存（📝 と並んで 🎵 バッジ）
+  - backend: `services/bgm_select.py` — 候補検索（bgm_vec, k=6）→ LLM 選択。直前の曲を
+    「継続」する選択肢を含め、切替の乱発を防ぐ。手動指名は LLM を回さず優先。埋め込み/LLM
+    が使えなければ直前を継続に劣化。story_scenes に **bgm_id 列**を追加（条件付き ALTER 移行）。
+    pipeline が各シーンで bgm を確定し保存、SSE の scene イベントにも載せる
+  - Theater: `BgmPlayer`（2 枚の <audio> で曲変更時のみクロスフェード、一時停止/音量/
+    オンオフに追従、終了で停止）。設定に「BGM を再生」+「BGM の音量」を追加
+  - 検証: build / py_compile / TestClient（save_story の bgm_id 永続化、resolve_bgm の
+    手動優先・埋め込み無し時の継続劣化・空クエリ継続）成功。実 LLM 自動選曲は次回生成で確認
 - 2026-07-09: Generate ノードのサムネイルを元の縦横比で表示（固定高さ + object-cover を
   やめ w-full h-auto に。サムネは元から比率保持で生成されており切れは CSS 起因だった）
 - 2026-07-09: Generate ノードの重なり緩和レイアウト（作者要望）— Compose 座標を基準に

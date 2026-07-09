@@ -99,5 +99,6 @@ CREATE TABLE IF NOT EXISTS story_scenes (
   is_fixed          INTEGER NOT NULL,    -- 1=作者が置いたアンカー / 0=LLMが埋めた(v1.5)
   selection_reason  TEXT,                -- LLM がこのカードを選んだ理由（v1.5）
   state_after       TEXT,                -- このシーン終了時点の確定事実(JSON) デバッグ/継続用
+  bgm_id            TEXT REFERENCES bgm(id),  -- このシーンで鳴らす BGM（NULL = なし。生成時に確定）
   UNIQUE(story_id, position)
 );

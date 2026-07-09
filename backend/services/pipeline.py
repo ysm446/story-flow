@@ -15,6 +15,7 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 
 from backend.db.database import get_connection
+from backend.services.bgm_select import resolve_bgm
 from backend.services.media import media_preview_data_url
 from backend.services.state import StoryState
 from backend.services.writer import write_scene_stream
@@ -29,6 +30,7 @@ def generate_stream(
     workspace_id: str | None = None,
     scene_length: str | None = None,
     include_images: bool = False,
+    include_bgm: bool = True,
     base_scenes: list[dict] | None = None,
     start_position: int = 0,
     mode: str = "full",
@@ -51,6 +53,7 @@ def generate_stream(
     state = StoryState.empty()
     scenes: list[dict] = []
     total = len(slots)
+    prev_bgm_id: str | None = None  # 直前シーンの BGM（「継続」判断の基準）
 
     for index, slot in enumerate(slots):
         card = slot["card"]
@@ -65,6 +68,7 @@ def generate_stream(
                 state_snapshot = state.snapshot()
             # 生成再開時に直前の確定事実を引き継げるよう state も追従させる
             state = StoryState.from_dict(state_snapshot)
+            base_bgm_id = base["bgm_id"] if "bgm_id" in base.keys() else None
             scene = {
                 "position": index,
                 "total": total,
@@ -74,7 +78,9 @@ def generate_stream(
                 "state_after": state_snapshot,
                 "is_fixed": bool(base["is_fixed"]),
                 "selection_reason": base["selection_reason"],
+                "bgm_id": base_bgm_id,
             }
+            prev_bgm_id = base_bgm_id
             scenes.append(scene)
             yield {
                 "type": "scene",
@@ -105,6 +111,18 @@ def generate_stream(
                 yield {"type": "delta", "position": index, "text": event[1]}
             else:
                 _, prose, state = event
+
+        # BGM を確定する（手動指名 > 自動選曲 > 継続）。生成時に一度だけ決めて保存する
+        bgm_id = None
+        if include_bgm:
+            mood_query = " ".join(
+                part for part in [state.tone_so_far, target_tone, card.get("brief")] if part
+            )
+            bgm_id = resolve_bgm(slot.get("bgm_id"), prev_bgm_id, mood_query, writer_base_url)
+        elif slot.get("bgm_id"):
+            bgm_id = slot.get("bgm_id")
+        prev_bgm_id = bgm_id
+
         scene = {
             "position": index,
             "total": total,
@@ -114,6 +132,7 @@ def generate_stream(
             "state_after": state.snapshot(),
             "is_fixed": True,  # v1 はアンカーのみ。v1.5 の穴埋めシーンで False になる
             "selection_reason": None,
+            "bgm_id": bgm_id,
         }
         scenes.append(scene)
         yield {"type": "scene", **scene, "reused": False, "stale": False}
@@ -145,8 +164,8 @@ def save_story(
         for scene in scenes:
             conn.execute(
                 "INSERT INTO story_scenes"
-                " (id, story_id, position, card_id, prose, is_fixed, selection_reason, state_after)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " (id, story_id, position, card_id, prose, is_fixed, selection_reason, state_after, bgm_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     str(uuid.uuid4()),
                     story_id,
@@ -156,6 +175,7 @@ def save_story(
                     1 if scene["is_fixed"] else 0,
                     scene["selection_reason"],
                     json.dumps(scene["state_after"], ensure_ascii=False),
+                    scene.get("bgm_id"),
                 ),
             )
         conn.commit()

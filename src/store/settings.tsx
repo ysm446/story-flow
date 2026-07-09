@@ -23,6 +23,10 @@ export interface UiSettings {
   theaterVideoLoopCrossfade: boolean
   /** Theater: クロスディゾルブの長さ（秒） */
   theaterVideoCrossfadeSeconds: number
+  /** BGM: 生成時の自動選曲 + Theater での再生を有効にする */
+  theaterBgmEnabled: boolean
+  /** Theater: BGM の音量（0〜1） */
+  theaterBgmVolume: number
   /** ステータスバー: システムリソース表示 */
   statusMonitorVisible: boolean
 }
@@ -37,6 +41,8 @@ const DEFAULT_SETTINGS: UiSettings = {
   theaterFitMode: 'cover',
   theaterVideoLoopCrossfade: true,
   theaterVideoCrossfadeSeconds: 1.0,
+  theaterBgmEnabled: true,
+  theaterBgmVolume: 0.5,
   statusMonitorVisible: true
 }
 

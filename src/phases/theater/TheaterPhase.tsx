@@ -8,7 +8,15 @@ import {
   IconTrash,
   IconX
 } from '../../components/icons'
-import { api, cardFileUrl, type Card, type StoryDetail, type StorySummary, type WorkspaceSummary } from '../../lib/api'
+import {
+  api,
+  bgmFileUrl,
+  cardFileUrl,
+  type Card,
+  type StoryDetail,
+  type StorySummary,
+  type WorkspaceSummary
+} from '../../lib/api'
 import { useUiSettings } from '../../store/settings'
 
 // 動画ループのクロスディゾルブ時間（秒）
@@ -161,6 +169,110 @@ function LoopVideo({ src, fitClass, paused }: { src: string; fitClass: string; p
       playsInline
       className={`h-full w-full ${fitClass}`}
     />
+  )
+}
+
+const BGM_FADE_MS = 900
+
+/** ボリュームを to へフェードする（既存の interval があれば呼び出し側で管理） */
+function fadeVolume(el: HTMLAudioElement, to: number, ms: number, onDone?: () => void): number {
+  const from = el.volume
+  const steps = Math.max(1, Math.round(ms / 40))
+  let i = 0
+  const timer = window.setInterval(() => {
+    i += 1
+    el.volume = Math.max(0, Math.min(1, from + (to - from) * (i / steps)))
+    if (i >= steps) {
+      window.clearInterval(timer)
+      onDone?.()
+    }
+  }, 40)
+  return timer
+}
+
+/**
+ * シーンごとの BGM を再生する。曲（bgm_id）が変わったときだけ 2 枚の <audio> で
+ * クロスフェードする。一時停止・音量・オンオフに追従する。
+ */
+function BgmPlayer({
+  bgmId,
+  volume,
+  paused,
+  enabled
+}: {
+  bgmId: string | null
+  volume: number
+  paused: boolean
+  enabled: boolean
+}) {
+  const refs = [useRef<HTMLAudioElement>(null), useRef<HTMLAudioElement>(null)]
+  const active = useRef(0)
+  const currentId = useRef<string | null>(null)
+  const timers = useRef<Array<number | null>>([null, null])
+
+  const startFade = (index: number, to: number, onDone?: () => void) => {
+    const el = refs[index].current
+    if (!el) return
+    if (timers.current[index] !== null) window.clearInterval(timers.current[index]!)
+    timers.current[index] = fadeVolume(el, to, BGM_FADE_MS, onDone)
+  }
+
+  // 曲の切り替え（クロスフェード）
+  useEffect(() => {
+    const target = enabled ? bgmId : null
+    if (target === currentId.current) return
+    currentId.current = target
+
+    const curIndex = active.current
+    const nextIndex = curIndex === 0 ? 1 : 0
+    const curEl = refs[curIndex].current
+    const nextEl = refs[nextIndex].current
+
+    if (curEl) startFade(curIndex, 0, () => curEl.pause())
+
+    if (target && nextEl) {
+      nextEl.src = bgmFileUrl(target)
+      nextEl.loop = true
+      nextEl.volume = 0
+      nextEl.currentTime = 0
+      if (!paused) void nextEl.play().catch(() => undefined)
+      startFade(nextIndex, volume)
+      active.current = nextIndex
+    }
+    // target が null（曲なし）のときは curEl をフェードアウトするだけ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bgmId, enabled])
+
+  // 一時停止に追従
+  useEffect(() => {
+    const el = refs[active.current].current
+    if (!el) return
+    if (paused) el.pause()
+    else if (enabled && currentId.current) void el.play().catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paused])
+
+  // 音量変更に追従（アクティブな曲のみ）
+  useEffect(() => {
+    const el = refs[active.current].current
+    if (el && currentId.current) el.volume = volume
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume])
+
+  // アンマウント時に停止
+  useEffect(() => {
+    return () => {
+      timers.current.forEach((t) => t !== null && window.clearInterval(t))
+      refs.forEach((r) => r.current?.pause())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <>
+      <audio ref={refs[0]} />
+      <audio ref={refs[1]} />
+    </>
   )
 }
 
@@ -497,6 +609,14 @@ function StoryPlayer({
       ref={stageOuterRef}
       className="flex h-full items-center justify-center overflow-hidden bg-black"
     >
+      {uiSettings.theaterBgmEnabled && (
+        <BgmPlayer
+          bgmId={finished ? null : scene?.bgm_id ?? null}
+          volume={uiSettings.theaterBgmVolume}
+          paused={paused}
+          enabled={uiSettings.theaterBgmEnabled}
+        />
+      )}
       <div
         className="relative overflow-hidden bg-black"
         style={stageStyle}

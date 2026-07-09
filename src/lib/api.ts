@@ -94,6 +94,8 @@ export interface WorkspaceGraphNode {
   y: number
   /** この作品でのこのシーンへの追加指示（ノードのプロパティ） */
   instruction?: string | null
+  /** このシーンの BGM 手動指名（null/未設定 = 自動選曲） */
+  bgm_id?: string | null
 }
 
 export interface WorkspaceGraphEdge {
@@ -150,6 +152,7 @@ export interface StoryScene {
   is_fixed: number
   selection_reason: string | null
   state_after: string | null
+  bgm_id: string | null
 }
 
 export interface StoryDetail extends StorySummary {
@@ -202,6 +205,7 @@ export type GenerateEvent =
 export interface GenerateSlot {
   card_id: string
   instruction: string | null
+  bgm_id: string | null
 }
 
 export interface GenerateInput {
@@ -213,6 +217,7 @@ export interface GenerateInput {
   prompt_preset_id: string | null
   scene_length: SceneLength | null
   include_images: boolean
+  include_bgm: boolean
   base_story_id: string | null
   start_position: number
   mode: 'full' | 'from_here' | 'single'
