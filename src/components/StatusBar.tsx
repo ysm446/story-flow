@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { SystemResources } from '../../electron/main/types'
+import { onStatusAction, type StatusAction } from '../lib/statusActions'
 import { useUiSettings } from '../store/settings'
-import { IconActivity } from './icons'
+import { IconActivity, IconAlert, IconCheck } from './icons'
 
 function fmtBytes(bytes: number): string {
   const gb = bytes / 1024 ** 3
@@ -30,25 +31,48 @@ function ResourceBar({ label, pct, detail }: { label: string; pct: number; detai
 }
 
 /**
- * 下部ステータスバー。右端にシステムリソース（CPU/RAM/GPU/VRAM）と表示オンオフ。
- * リソース値は Electron main が 1 秒ごとに push する（lm-graph から移植）。
+ * 下部ステータスバー。左にアクション通知（保存・更新など）、右端にシステムリソース
+ * （CPU/RAM/GPU/VRAM）と表示オンオフ。リソース値は Electron main が 1 秒ごとに push する。
  */
-export function StatusBar({ backendHealthy, modelLabel }: { backendHealthy: boolean; modelLabel: string }) {
+export function StatusBar() {
   const { settings, updateSettings } = useUiSettings()
   const [res, setRes] = useState<SystemResources | null>(null)
+  const [action, setAction] = useState<StatusAction | null>(null)
+  const [actionVisible, setActionVisible] = useState(false)
 
   useEffect(() => {
     return window.storyFlow.onSystemResources((payload) => setRes(payload))
   }, [])
 
+  // アクション通知（保存・更新など）: 受信したら表示し、数秒後にフェードアウト
+  useEffect(() => {
+    return onStatusAction((next) => {
+      setAction(next)
+      setActionVisible(true)
+    })
+  }, [])
+  useEffect(() => {
+    if (!action) return
+    const timer = setTimeout(() => setActionVisible(false), action.kind === 'error' ? 8_000 : 5_000)
+    return () => clearTimeout(timer)
+  }, [action])
+
   return (
     <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-sidebar)] px-3">
-      {/* 左: 接続状態 */}
-      <span className="flex items-center gap-1.5 text-[11px] text-[var(--text-faint)]">
-        <span className={`inline-block h-1.5 w-1.5 rounded-full ${backendHealthy ? 'bg-[var(--ok)]' : 'bg-[var(--danger)]'}`} />
-        backend
-      </span>
-      <span className="max-w-[280px] truncate text-[11px] text-[var(--text-faint)]">{modelLabel}</span>
+      {/* 左: アクション通知（保存・更新など。数秒でフェードアウト） */}
+      {action && (
+        <span
+          className={`flex min-w-0 items-center gap-1.5 text-[11px] transition-opacity duration-700 ${
+            actionVisible ? 'opacity-100' : 'opacity-0'
+          } ${action.kind === 'error' ? 'text-[var(--danger)]' : 'text-[var(--text-dim)]'}`}
+        >
+          {action.kind === 'error' ? <IconAlert size={11} /> : <IconCheck size={11} />}
+          <span className="truncate">{action.message}</span>
+          <span className="shrink-0 tabular-nums text-[var(--text-faint)]">
+            {action.at.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+        </span>
+      )}
 
       {/* 右: システムリソース + オンオフ */}
       <div className="ml-auto flex items-center gap-3">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IconAlert, IconMusic } from '../../components/icons'
 import { api, bgmFileUrl, type Bgm } from '../../lib/api'
+import { reportStatusAction } from '../../lib/statusActions'
 
 type SearchMode = 'keyword' | 'semantic'
 
@@ -196,6 +197,7 @@ function BgmEditor({
         saved = await api.uploadBgmMedia(saved.id, pendingFile)
         setPendingFile(null)
       }
+      reportStatusAction(`BGM「${saved.title}」を${bgm ? '更新' : '作成'}しました`)
       onSaved(saved)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))

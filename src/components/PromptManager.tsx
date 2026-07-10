@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type PromptConfig, type PromptKind, type PromptPreset } from '../lib/api'
+import { reportStatusAction } from '../lib/statusActions'
 
 /**
  * 生成用 system prompt のプリセット管理（設定画面用）。
@@ -62,6 +63,7 @@ export function PromptManager({ kind, title }: { kind: PromptKind; title: string
     if (editingId === null || editingId === 'default') return
     return run(async () => {
       await api.updatePromptPreset(kind, editingId, { name: editName, content: editContent })
+      reportStatusAction(`プロンプト「${editName}」を保存しました`)
       setEditingId(null)
     })
   }

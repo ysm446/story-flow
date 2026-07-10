@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconFilm, IconPlay } from '../../components/icons'
 import { api, cardFileUrl, type Card, type CardInput, type CardRole, type CardTag, type CardTone, type TagType } from '../../lib/api'
+import { reportStatusAction } from '../../lib/statusActions'
 
 const ROLE_OPTIONS: Array<{ value: CardRole | ''; label: string }> = [
   { value: '', label: '自動（指定しない）' },
@@ -112,6 +113,7 @@ export function CardEditor({ card, initialFile = null, onSaved, onDeleted, onClo
         saved = await api.uploadMedia(saved.id, pendingFile)
         setPendingFile(null)
       }
+      reportStatusAction(`カード「${saved.title}」を${card ? '更新' : '作成'}しました`)
       onSaved(saved)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))

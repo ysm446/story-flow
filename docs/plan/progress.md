@@ -522,6 +522,17 @@
   オフは従来の自動（文字数ヒューリスティックとの max）。設定キーは
   theaterFixedWaitEnabled / theaterFixedWaitSeconds。検証: build 成功。挙動はアプリ確認待ち
 
+- 2026-07-11: **保存・更新アクションを下部ステータスバーに通知**（作者要望。自動保存で
+  「保存されたか」が分かりにくい問題）— `src/lib/statusActions.ts`（React context を介さない
+  pub/sub。reportStatusAction / onStatusAction）を新設し、StatusBar が最新アクションを
+  時刻付きで表示（info 5 秒 / error 8 秒でフェードアウト、error は赤 + IconAlert）。
+  発信元: Compose 自動保存の成功/失敗、カード・BGM の作成/更新、プロンプトプリセット保存。
+  icons.tsx に IconCheck 追加。Compose 左上の「保存済み/保存中…」表示は従来どおり併存。
+  あわせてステータスバーの backend 死活ドット + モデル名表示を撤去（作者判断。
+  モデル状態はヘッダーのモデルバーにある。App.tsx の死活監視ループは
+  ライブラリ状態の取得に必要なため残置、backendHealthy state のみ削除）。
+  検証: build 成功。表示はアプリ確認待ち
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）

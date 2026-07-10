@@ -39,7 +39,6 @@ function AppShell() {
   const [llamaStatus, setLlamaStatus] = useState<LlamaServerStatus | null>(null)
   const [embedding, setEmbedding] = useState<EmbeddingStatus | null>(null)
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
-  const [backendHealthy, setBackendHealthy] = useState(false)
   const [rightPanel, setRightPanel] = useState<RightPanel>(null)
   const [libraryRoot, setLibraryRoot] = useState<string | null>(null)
   const [libraryChecked, setLibraryChecked] = useState(false)
@@ -110,16 +109,14 @@ function AppShell() {
     }
   }, [])
 
-  // バックエンドの死活監視 + ライブラリ状態の取得
+  // バックエンドの死活確認（応答するまでライブラリ状態の取得を待つ）
   useEffect(() => {
     let canceled = false
     const check = async () => {
       try {
         await api.health()
         if (canceled) return
-        setBackendHealthy(true)
       } catch {
-        if (!canceled) setBackendHealthy(false)
         return
       }
       // ライブラリ状態は死活とは独立に確認する（失敗してもピッカーは手動で開ける）
@@ -143,12 +140,6 @@ function AppShell() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backendStatus, libraryChecked])
-
-  const modelLabel = settings?.isModelLoaded
-    ? settings.selectedModelName
-    : settings?.isServerInstalled
-      ? 'モデル未ロード'
-      : 'llama-server 未導入'
 
   // ライブラリのフォルダ名（末尾）を表示用に
   const libraryName = libraryRoot ? (libraryRoot.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? libraryRoot) : null
@@ -258,7 +249,7 @@ function AppShell() {
         )}
       </div>
 
-      <StatusBar backendHealthy={backendHealthy} modelLabel={modelLabel} />
+      <StatusBar />
     </div>
   )
 }

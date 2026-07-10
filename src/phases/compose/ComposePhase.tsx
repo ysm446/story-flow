@@ -34,6 +34,7 @@ import {
 } from '../../lib/api'
 import { computeChain } from '../../lib/chain'
 import { expandFolderSelection, flattenTree } from '../../lib/folders'
+import { reportStatusAction } from '../../lib/statusActions'
 import { useAppStore } from '../../store/appStore'
 import { LoreEditor } from './LoreEditor'
 
@@ -470,8 +471,14 @@ function ComposeInner() {
       setSaveState('saving')
       api
         .updateWorkspace(workspaceId, buildUpdatePayload())
-        .then(() => setSaveState('saved'))
-        .catch(() => setSaveState('error'))
+        .then(() => {
+          setSaveState('saved')
+          reportStatusAction('作品の変更を保存しました')
+        })
+        .catch(() => {
+          setSaveState('error')
+          reportStatusAction('作品の保存に失敗しました', 'error')
+        })
     }, AUTOSAVE_DELAY_MS)
     return () => clearTimeout(timer)
   }, [workspaceId, buildUpdatePayload])

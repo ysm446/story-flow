@@ -46,6 +46,14 @@ export function IconSettings(props: IconProps) {
   )
 }
 
+export function IconCheck(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 6 9 17l-5-5" />
+    </Icon>
+  )
+}
+
 export function IconActivity(props: IconProps) {
   return (
     <Icon {...props}>
