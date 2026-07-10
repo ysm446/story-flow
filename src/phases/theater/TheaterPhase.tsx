@@ -621,6 +621,11 @@ function StoryPlayer({
   }
   const fitClass = uiSettings.theaterFitMode === 'contain' ? 'object-contain' : 'object-cover'
 
+  // 本文スクロール時に行が上下端で中途半端に切れて見えないよう、1 行ぶん（leading-[2]）を
+  // フェードで消す。同じ高さの内側パディングを足し、スクロールなし時は本文がフェードに掛からない
+  const textFadePx = uiSettings.theaterFontSizePx * 2
+  const textFadeMask = `linear-gradient(to bottom, transparent 0, black ${textFadePx}px, black calc(100% - ${textFadePx}px), transparent 100%)`
+
   return (
     <div
       ref={stageOuterRef}
@@ -683,7 +688,16 @@ function StoryPlayer({
           className="absolute inset-x-0 bottom-0 px-10 pb-14 pt-6 transition-opacity duration-[1200ms]"
           style={{ opacity: ending ? 0 : 1 }}
         >
-          <div ref={textRef} className="no-scrollbar mx-auto max-h-[25vh] max-w-2xl overflow-y-auto">
+          <div
+            ref={textRef}
+            className="no-scrollbar mx-auto max-w-2xl overflow-y-auto"
+            style={{
+              maxHeight: `calc(25vh + ${textFadePx * 2}px)`,
+              padding: `${textFadePx}px 0`,
+              maskImage: textFadeMask,
+              WebkitMaskImage: textFadeMask
+            }}
+          >
             <p
               className="whitespace-pre-wrap leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]"
               style={{
