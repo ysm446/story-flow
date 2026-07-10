@@ -192,11 +192,11 @@ function AnchorNode({ data, selected }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-[var(--accent)]" />
       {card.media_path && (
-        <div className="relative h-[84px] overflow-hidden bg-[var(--bg-canvas)]">
+        <div className="relative overflow-hidden bg-[var(--bg-canvas)]">
           <img
             src={cardFileUrl(card.id, true)}
             alt=""
-            className="h-full w-full object-cover"
+            className="block h-auto w-full"
             draggable={false}
             onError={(event) => {
               event.currentTarget.style.visibility = 'hidden'

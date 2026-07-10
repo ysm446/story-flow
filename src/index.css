@@ -127,6 +127,25 @@ input[type='range'].slider:disabled::-webkit-slider-thumb {
   background: var(--text-faint);
 }
 
+/* Compose: 範囲選択の確定後に選択ノード群へ残る矩形（NodesSelection）は見せない。
+   選択ノードはハイライトで分かり、ノード自体を掴めばまとめて動かせる */
+.react-flow__nodesselection-rect {
+  display: none;
+}
+
+/* キャンバス: 選択中のエッジはアクセント色 + 太く
+   （React Flow 既定の #555 は暗いキャンバスでは細く・薄く見える）。
+   色はクラス上書きだとクリック時の :focus 既定ルール（詳細度が高い）に負けるため、
+   既定ルールが参照する変数 --xy-edge-stroke-selected で指定する */
+.react-flow {
+  --xy-edge-stroke-selected: var(--accent);
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge.selectable:focus .react-flow__edge-path,
+.react-flow__edge.selectable:focus-visible .react-flow__edge-path {
+  stroke-width: 2;
+}
+
 /* Theater: 本文スクロール領域（スクロールバーは見せない） */
 .no-scrollbar {
   scrollbar-width: none;
