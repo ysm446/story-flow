@@ -5,6 +5,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -195,6 +196,35 @@ function GenerateInner() {
 
   // アンマウント（実質アプリ終了）時に進行中のストリームを畳む
   useEffect(() => () => abortRef.current?.abort(), [])
+
+  // キャンバスのショートカット（Compose と同じ操作系）: A = 全体表示 / F = 選択ノードにフォーカス。
+  // ノードを選択していなくても効くよう window で拾う（Generate 表示中のみ。
+  // 入力欄へのタイプ中・修飾キー押下時は無視）
+  useEffect(() => {
+    if (phase !== 'generate') return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const key = event.key.toLowerCase()
+      if (key === 'a') {
+        event.preventDefault()
+        void reactFlow.fitView({ padding: 0.15, duration: 300 })
+      } else if (key === 'f') {
+        const selected = nodes.filter((node) => node.selected)
+        if (selected.length === 0) return
+        event.preventDefault()
+        void reactFlow.fitView({
+          nodes: selected.map((node) => ({ id: node.id })),
+          padding: 0.4,
+          maxZoom: 1.2,
+          duration: 300
+        })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [phase, nodes, reactFlow])
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
   const bgmTitleById = useMemo(() => new Map(allBgm.map((bgm) => [bgm.id, bgm.title])), [allBgm])
@@ -615,6 +645,9 @@ function GenerateInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodesConnectable={false}
+          selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={[1, 2]}
           minZoom={0.2}
           maxZoom={1.5}
           fitView
