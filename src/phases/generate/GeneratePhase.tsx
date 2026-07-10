@@ -189,6 +189,7 @@ function GenerateInner() {
   const [sceneViews, setSceneViews] = useState<SceneView[]>([])
   const [status, setStatus] = useState<RunStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const abortRef = useRef<AbortController | null>(null)
@@ -317,6 +318,7 @@ function GenerateInner() {
     if (slotCards.some((slot) => slot.kind === 'card' && !slot.cardId)) return
 
     setError(null)
+    setNotice(null)
     setStatus('starting-model')
     setSceneViews(
       slotCards.map((slot) => ({
@@ -329,6 +331,11 @@ function GenerateInner() {
       }))
     )
 
+    // モデル起動待ちの間もキャンセルできるよう、controller はここで作る
+    const controller = new AbortController()
+    abortRef.current = controller
+    // done / error イベントを受けずにストリームが閉じた場合を成功と誤認しないための追跡
+    let sawTerminalEvent = false
     try {
       let settings = await window.storyFlow.listModels()
       if (!settings.isServerInstalled) {
@@ -337,12 +344,10 @@ function GenerateInner() {
       if (!settings.isModelLoaded) {
         settings = (await window.storyFlow.ensureLlama()).settings
       }
+      // モデル起動中にキャンセルされた場合はここで抜ける（モデルの起動自体は止めない）
+      if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError')
 
       setStatus('generating')
-      // done / error イベントを受けずにストリームが閉じた場合を成功と誤認しないための追跡
-      let sawTerminalEvent = false
-      const controller = new AbortController()
-      abortRef.current = controller
       await postSse<GenerateEvent>(
         '/generate',
         {
@@ -429,8 +434,23 @@ function GenerateInner() {
         throw new Error('生成が完了する前に接続が切れました。テイクは保存されていません。')
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-      setStatus('error')
+      if (controller.signal.aborted) {
+        // ユーザーによるキャンセル。done を受信済みなら保存まで済んでいるので何もしない
+        if (!sawTerminalEvent) {
+          setSceneViews((prev) =>
+            prev.map((scene) =>
+              scene.status === 'selecting' || scene.status === 'streaming'
+                ? { ...scene, status: 'pending' }
+                : scene
+            )
+          )
+          setNotice('生成をキャンセルしました（このテイクは保存されていません）')
+          setStatus('idle')
+        }
+      } else {
+        setError(cause instanceof Error ? cause.message : String(cause))
+        setStatus('error')
+      }
     } finally {
       abortRef.current = null
     }
@@ -566,6 +586,15 @@ function GenerateInner() {
                 ? '生成中…'
                 : '新しいテイクを生成'}
           </button>
+          {isRunning && (
+            <button
+              onClick={() => abortRef.current?.abort()}
+              title="生成を中断する（ここまでの結果はテイクとして保存されません）"
+              className="w-full rounded border border-[var(--border-strong)] px-4 py-1.5 text-[12px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--danger)]"
+            >
+              キャンセル
+            </button>
+          )}
           {(!anchors || anchors.length === 0) && (
             <div className="text-[11px] text-[var(--text-faint)]">
               {composeNodes.length > 0 ? '構成が一本の鎖になっていません。' : '構成がありません。'}
@@ -585,6 +614,11 @@ function GenerateInner() {
           {error && (
             <div className="rounded border border-[var(--danger)] bg-[rgba(239,68,68,0.08)] px-2 py-1.5 text-[11px] text-[var(--danger)]">
               {error}
+            </div>
+          )}
+          {notice && (
+            <div className="rounded border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-[11px] text-[var(--text-dim)]">
+              {notice}
             </div>
           )}
         </div>
