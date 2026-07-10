@@ -13,6 +13,8 @@ export interface UiSettings {
   theaterTextStreamMsPerChar: number
   /** Theater: 本文のフォントサイズ（px） */
   theaterFontSizePx: number
+  /** Theater: 本文のフォント（src/lib/theaterFonts.ts のプリセット ID） */
+  theaterFontId: string
   /** Theater: 再生ステージのサイズ（画面に対する %。100 = 全面） */
   theaterStageScale: number
   /** Theater: 再生ステージの縦横比（auto = ウィンドウに合わせる） */
@@ -36,6 +38,7 @@ const DEFAULT_SETTINGS: UiSettings = {
   theaterTextStreaming: true,
   theaterTextStreamMsPerChar: 45,
   theaterFontSizePx: 16,
+  theaterFontId: 'default',
   theaterStageScale: 100,
   theaterAspectRatio: 'auto',
   theaterFitMode: 'cover',

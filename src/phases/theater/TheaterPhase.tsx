@@ -17,6 +17,7 @@ import {
   type StorySummary,
   type WorkspaceSummary
 } from '../../lib/api'
+import { theaterFontFamily } from '../../lib/theaterFonts'
 import { useUiSettings } from '../../store/settings'
 
 // 動画ループのクロスディゾルブ時間（秒）
@@ -685,7 +686,10 @@ function StoryPlayer({
           <div ref={textRef} className="no-scrollbar mx-auto max-h-[25vh] max-w-2xl overflow-y-auto">
             <p
               className="whitespace-pre-wrap leading-[2] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]"
-              style={{ fontSize: `${uiSettings.theaterFontSizePx}px` }}
+              style={{
+                fontSize: `${uiSettings.theaterFontSizePx}px`,
+                fontFamily: theaterFontFamily(uiSettings.theaterFontId)
+              }}
             >
               {isStreaming ? scene.prose.slice(0, visibleChars) : scene.prose}
             </p>

@@ -11,6 +11,10 @@
     "preview": "electron-vite preview"
   },
   "dependencies": {
+    "@fontsource/dotgothic16": "^5.2.8",
+    "@fontsource/klee-one": "^5.2.8",
+    "@fontsource/shippori-mincho": "^5.2.8",
+    "@fontsource/zen-old-mincho": "^5.2.8",
     "@xyflow/react": "^12.8.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

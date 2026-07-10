@@ -1,3 +1,4 @@
+import { THEATER_FONTS, theaterFontFamily } from '../lib/theaterFonts'
 import { useUiSettings, type UiSettings } from '../store/settings'
 import { IconX } from './icons'
 import { PromptManager } from './PromptManager'
@@ -155,6 +156,28 @@ export function SettingsPanel({
                 リセット
               </button>
             </div>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px]">本文のフォント</span>
+              <select
+                value={settings.theaterFontId}
+                onChange={(event) => updateSettings({ theaterFontId: event.target.value })}
+                className="rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1 text-[12px]"
+              >
+                {THEATER_FONTS.map((font) => (
+                  <option key={font.id} value={font.id}>
+                    {font.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p
+              className="mt-2 rounded bg-[var(--bg-canvas)] px-2.5 py-2 text-[14px] leading-relaxed text-[var(--text)]"
+              style={{ fontFamily: theaterFontFamily(settings.theaterFontId) }}
+            >
+              雨はまだ、駅舎の屋根を叩いていた。——プレビュー
+            </p>
           </div>
           <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
             <div className="flex items-center justify-between">
