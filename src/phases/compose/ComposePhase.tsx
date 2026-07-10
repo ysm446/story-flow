@@ -60,6 +60,12 @@ const SCENE_LENGTH_OPTIONS: Array<{ value: SceneLength | ''; label: string }> = 
 
 const LAST_WORKSPACE_KEY = 'story-flow:last-workspace'
 const AUTOSAVE_DELAY_MS = 800
+const DEFAULT_ASSET_HEIGHT = 240
+
+// アセットエリア → キャンバスへのドラッグ&ドロップで使う dataTransfer タイプ
+// （OS からのファイルドロップと区別するため独自 MIME にする）
+const CARD_DND_TYPE = 'application/x-story-flow-card'
+const GAP_DND_TYPE = 'application/x-story-flow-gap'
 
 interface NameDialogState {
   title: string
@@ -307,7 +313,7 @@ function ComposeInner() {
   const [wsMenu, setWsMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(240)
   const [rightWidth, setRightWidth] = useState(280)
-  const [assetHeight, setAssetHeight] = useState(150)
+  const [assetHeight, setAssetHeight] = useState(DEFAULT_ASSET_HEIGHT)
   const hydrated = useRef(false)
   const reactFlow = useReactFlow()
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -579,24 +585,72 @@ function ComposeInner() {
     return position
   }
 
-  const addCardNode = (card: Card) => {
+  const addCardNode = (card: Card, position?: { x: number; y: number }) => {
     setNodes((prev) => [
       ...prev,
-      { id: card.id, type: 'anchor', position: nextFreePosition(), data: { card, instruction: '' } }
+      { id: card.id, type: 'anchor', position: position ?? nextFreePosition(), data: { card, instruction: '' } }
     ])
   }
 
   // おまかせスロット（v1.5 穴埋め）: 生成時に LLM が在庫から 1 枚選んで埋める
-  const addGapNode = () => {
+  const addGapNode = (position?: { x: number; y: number }) => {
     setNodes((prev) => [
       ...prev,
       {
         id: `gap-${crypto.randomUUID()}`,
         type: 'gap',
-        position: nextFreePosition(),
+        position: position ?? nextFreePosition(),
         data: { kind: 'gap', instruction: '', bgmId: null, targetRole: null }
       }
     ])
+  }
+
+  // キャンバスのショートカット（キャンバス内にフォーカスがあるときのみ届く）:
+  // A = ネットワーク全体を表示 / F = 選択中のノードにフォーカス
+  const onCanvasKeyDown = (event: React.KeyboardEvent) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+    const target = event.target as HTMLElement
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return
+    const key = event.key.toLowerCase()
+    if (key === 'a') {
+      event.preventDefault()
+      void reactFlow.fitView({ padding: 0.15, duration: 300 })
+    } else if (key === 'f') {
+      const selected = nodes.filter((node) => node.selected)
+      if (selected.length === 0) return
+      event.preventDefault()
+      void reactFlow.fitView({
+        nodes: selected.map((node) => ({ id: node.id })),
+        padding: 0.4,
+        maxZoom: 1.2,
+        duration: 300
+      })
+    }
+  }
+
+  // アセットエリアからのドラッグ&ドロップ配置（ドロップ位置にノードの中心を合わせる）
+  const onCanvasDragOver = (event: React.DragEvent) => {
+    const types = event.dataTransfer.types
+    if (types.includes(CARD_DND_TYPE) || types.includes(GAP_DND_TYPE)) {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+    }
+  }
+
+  const onCanvasDrop = (event: React.DragEvent) => {
+    const cardId = event.dataTransfer.getData(CARD_DND_TYPE)
+    const isGap = event.dataTransfer.types.includes(GAP_DND_TYPE)
+    if (!cardId && !isGap) return
+    event.preventDefault()
+    const center = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    const position = { x: center.x - 95, y: center.y - 70 } // ノード（幅 190）の中心を合わせる
+    if (cardId) {
+      const card = cardById.get(cardId)
+      if (!card || placedIds.has(card.id)) return
+      addCardNode(card, position)
+    } else {
+      addGapNode(position)
+    }
   }
 
   const updateNodeInstruction = (nodeId: string, instruction: string) => {
@@ -767,7 +821,13 @@ function ComposeInner() {
 
       {/* 中央: ノードネットワーク + 下部アセットエリア */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div ref={canvasRef} className="relative min-h-0 flex-1">
+        <div
+          ref={canvasRef}
+          className="relative min-h-0 flex-1"
+          onDragOver={onCanvasDragOver}
+          onDrop={onCanvasDrop}
+          onKeyDown={onCanvasKeyDown}
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -823,10 +883,15 @@ function ComposeInner() {
         >
           <div className="flex items-center justify-between px-3 pt-2">
             <span className="text-[12px] font-semibold text-[var(--text-dim)]">
-              アセット（クリックでキャンバスに配置）
+              アセット（クリックまたはドラッグでキャンバスに配置）
             </span>
             <button
-              onClick={addGapNode}
+              onClick={() => addGapNode()}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData(GAP_DND_TYPE, '1')
+                event.dataTransfer.effectAllowed = 'move'
+              }}
               title="生成時に LLM が在庫から 1 枚選んで埋めるスロットを置く（始点・終点にはできません）"
               className="flex items-center gap-1 rounded border border-dashed border-[var(--border-strong)] px-2 py-1 text-[11px] text-[var(--text-dim)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
             >
@@ -843,8 +908,13 @@ function ComposeInner() {
                 <button
                   key={card.id}
                   onClick={() => addCardNode(card)}
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData(CARD_DND_TYPE, card.id)
+                    event.dataTransfer.effectAllowed = 'move'
+                  }}
                   title={card.title}
-                  className="flex w-28 shrink-0 flex-col overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-left hover:border-[var(--border-strong)]"
+                  className="flex w-28 shrink-0 cursor-grab flex-col overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-left hover:border-[var(--border-strong)] active:cursor-grabbing"
                 >
                   <span className="relative block h-16 w-full bg-[var(--bg-canvas)]">
                     {card.media_path ? (
