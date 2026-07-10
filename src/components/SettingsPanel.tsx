@@ -133,6 +133,52 @@ export function SettingsPanel({
               小さいほど速い。文字送りが終わるまでシーンは送られません
             </div>
           </div>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={settings.theaterFixedWaitEnabled}
+              onChange={(event) => updateSettings({ theaterFixedWaitEnabled: event.target.checked })}
+              className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="block text-[13px]">シーンの待ち時間を指定</span>
+              <span className="mt-0.5 block text-[12px] leading-relaxed text-[var(--text-faint)]">
+                本文の表示が終わってから次のシーンへ移るまでの待ち時間を固定します。
+                オフのときは本文の長さから自動で決めます（既定）。
+              </span>
+            </span>
+          </label>
+          <div
+            className={`rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 ${
+              settings.theaterFixedWaitEnabled ? '' : 'opacity-50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[13px]">待ち時間</span>
+              <span className="font-mono text-[12px] text-[var(--text-dim)]">
+                {settings.theaterFixedWaitSeconds.toFixed(1)} 秒
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={30}
+                step={0.5}
+                value={settings.theaterFixedWaitSeconds}
+                disabled={!settings.theaterFixedWaitEnabled}
+                onChange={(event) => updateSettings({ theaterFixedWaitSeconds: Number(event.target.value) })}
+                className="slider min-w-0 flex-1"
+              />
+              <button
+                onClick={() => updateSettings({ theaterFixedWaitSeconds: 3.0 })}
+                disabled={!settings.theaterFixedWaitEnabled || settings.theaterFixedWaitSeconds === 3.0}
+                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-0.5 text-[11px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+              >
+                リセット
+              </button>
+            </div>
+          </div>
           <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[13px]">本文のフォントサイズ</span>

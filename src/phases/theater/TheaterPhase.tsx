@@ -571,11 +571,33 @@ function StoryPlayer({
   // オート送り（ストリーミングが遅い設定でも文字送りが終わる前に切り替わらないようにする）
   useEffect(() => {
     if (paused || finished || ending || !scene) return
-    const streamingMs = isStreaming ? scene.prose.length * streamMsPerChar + 3_000 : 0
-    const duration = Math.max(sceneDurationMs(scene.prose), streamingMs)
+    let duration: number
+    if (uiSettings.theaterFixedWaitEnabled) {
+      // 待ち時間の固定指定: 本文の表示が終わった時点 + 指定秒数で送る。
+      // ストリーミングオフ時の「表示が終わった時点」はオートスクロールが最下部に達する時刻
+      // （冒頭 2 秒静止 + スクロール。末尾 2 秒の静止は指定秒数に置き換わる）
+      const textDoneMs = isStreaming
+        ? scene.prose.length * streamMsPerChar
+        : Math.max(3_000, sceneDurationMs(scene.prose) - 2_000)
+      duration = textDoneMs + uiSettings.theaterFixedWaitSeconds * 1_000
+    } else {
+      const streamingMs = isStreaming ? scene.prose.length * streamMsPerChar + 3_000 : 0
+      duration = Math.max(sceneDurationMs(scene.prose), streamingMs)
+    }
     const timer = setTimeout(() => goTo(index + 1), duration)
     return () => clearTimeout(timer)
-  }, [index, paused, finished, ending, scene, goTo, isStreaming, streamMsPerChar])
+  }, [
+    index,
+    paused,
+    finished,
+    ending,
+    scene,
+    goTo,
+    isStreaming,
+    streamMsPerChar,
+    uiSettings.theaterFixedWaitEnabled,
+    uiSettings.theaterFixedWaitSeconds
+  ])
 
   // キーボード操作（Esc は 全画面解除 → もう一度で一覧へ の 2 段階）
   useEffect(() => {

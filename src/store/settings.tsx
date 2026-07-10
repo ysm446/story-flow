@@ -11,6 +11,10 @@ export interface UiSettings {
   theaterTextStreaming: boolean
   /** Theater: 文字送りの間隔（ms/字。小さいほど速い） */
   theaterTextStreamMsPerChar: number
+  /** Theater: 次のシーンへ移るまでの待ち時間を固定秒数で指定する（オフ = 本文の長さから自動） */
+  theaterFixedWaitEnabled: boolean
+  /** Theater: 本文の表示が終わってから次のシーンへ移るまでの秒数（固定指定時） */
+  theaterFixedWaitSeconds: number
   /** Theater: 本文のフォントサイズ（px） */
   theaterFontSizePx: number
   /** Theater: 本文のフォント（src/lib/theaterFonts.ts のプリセット ID） */
@@ -37,6 +41,8 @@ const DEFAULT_SETTINGS: UiSettings = {
   generateIncludeImages: true,
   theaterTextStreaming: true,
   theaterTextStreamMsPerChar: 45,
+  theaterFixedWaitEnabled: false,
+  theaterFixedWaitSeconds: 3.0,
   theaterFontSizePx: 16,
   theaterFontId: 'default',
   theaterStageScale: 100,
