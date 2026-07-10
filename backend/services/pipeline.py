@@ -38,6 +38,7 @@ def generate_stream(
     start_position: int = 0,
     mode: str = "full",
     folder_ids: list[str] | None = None,
+    lore: list[dict] | None = None,
 ) -> Iterator[dict]:
     """スロット列を左から逐次清書し、シーン毎に dict を yield する。
 
@@ -145,6 +146,7 @@ def generate_stream(
             scene_length=scene_length,
             instruction=slot.get("instruction"),
             image_data_url=image_data_url,
+            lore=lore,
         ):
             if event[0] == "delta":
                 yield {"type": "delta", "position": index, "text": event[1]}

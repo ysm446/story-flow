@@ -80,6 +80,24 @@ def _load_slots(slot_inputs: list[SlotInput]) -> list[dict]:
         conn.close()
 
 
+def _load_lore(workspace_id: str | None) -> list[dict]:
+    """作品の背景設定メモ（恒久設定）。清書時に全文注入する（Phase 1。長文化したら RAG 化）。"""
+    if not workspace_id:
+        return []
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT lore FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return []
+    try:
+        lore = json.loads(row["lore"] or "[]")
+    except (json.JSONDecodeError, TypeError):
+        return []
+    return [memo for memo in lore if isinstance(memo, dict)] if isinstance(lore, list) else []
+
+
 def _load_base_scenes(base_story_id: str, expected_count: int, start_position: int) -> list[dict]:
     conn = get_connection()
     try:
@@ -135,6 +153,7 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
                 start_position=payload.start_position,
                 mode=payload.mode,
                 folder_ids=payload.folder_ids,
+                lore=_load_lore(payload.workspace_id),
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except LlmError as error:

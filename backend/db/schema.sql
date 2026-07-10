@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS workspaces (
   prompt_preset_id  TEXT,               -- NULL = 既定プロンプト
   scene_length      TEXT CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL),
   folder_ids        TEXT NOT NULL DEFAULT '[]',  -- この作品で使うフォルダ ID の JSON 配列（ルートは常時使用）
+  lore              TEXT NOT NULL DEFAULT '[]',  -- 背景設定メモの JSON 配列 [{"id","title","body"}]。
+                                                 -- 恒久設定（canon）。清書時に全文注入（goals.md 設定資料 RAG の Phase 1）
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );

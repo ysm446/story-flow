@@ -136,6 +136,13 @@ export interface WorkspaceSummary {
 
 export type SceneLength = 'short' | 'standard' | 'long'
 
+/** 背景設定メモ（作品の恒久設定 = canon）。清書時に全文注入される */
+export interface LoreMemo {
+  id: string
+  title: string
+  body: string
+}
+
 export interface Workspace {
   id: string
   name: string
@@ -145,6 +152,7 @@ export interface Workspace {
   prompt_preset_id: string | null
   scene_length: SceneLength | null
   folder_ids: string[] // この作品で使うフォルダ（ルートは常時使用。選択はサブツリーを含む）
+  lore: LoreMemo[]
   created_at: string
   updated_at: string
 }
@@ -160,6 +168,7 @@ export interface WorkspaceUpdateInput {
   scene_length?: SceneLength | null
   clear_scene_length?: boolean
   folder_ids?: string[]
+  lore?: LoreMemo[]
 }
 
 export interface StoryScene {

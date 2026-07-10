@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import type { CardRole, CardTone, SceneLength } from '../lib/api'
+import type { CardRole, CardTone, LoreMemo, SceneLength } from '../lib/api'
 
 export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 
@@ -26,6 +26,8 @@ export interface CompositionDraft {
   sceneLength: SceneLength | ''
   /** この作品で使うフォルダ（ルートは常時使用。選択はサブツリーを含む。空 = ルートのみ） */
   folderIds: string[]
+  /** 背景設定メモ（作品の恒久設定 = canon）。清書時に全文注入される */
+  lore: LoreMemo[]
 }
 
 interface AppStore {
@@ -55,7 +57,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     targetTone: '',
     promptPresetId: null,
     sceneLength: '',
-    folderIds: []
+    folderIds: [],
+    lore: []
   })
   const [composeNodes, setComposeNodes] = useState<Node[]>([])
   const [composeEdges, setComposeEdges] = useState<Edge[]>([])

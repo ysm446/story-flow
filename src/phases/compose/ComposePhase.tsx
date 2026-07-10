@@ -35,6 +35,7 @@ import {
 import { computeChain } from '../../lib/chain'
 import { expandFolderSelection, flattenTree } from '../../lib/folders'
 import { useAppStore } from '../../store/appStore'
+import { LoreEditor } from './LoreEditor'
 
 const ROLE_LABELS: Record<CardRole, string> = {
   intro: '導入',
@@ -311,6 +312,8 @@ function ComposeInner() {
   const [promptConfig, setPromptConfig] = useState<PromptConfig | null>(null)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
   const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null)
+  const [loreOpen, setLoreOpen] = useState(false)
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const [wsMenu, setWsMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(240)
   const [rightWidth, setRightWidth] = useState(280)
@@ -331,7 +334,8 @@ function ComposeInner() {
         targetTone: workspace.target_tone ?? '',
         promptPresetId: workspace.prompt_preset_id,
         sceneLength: workspace.scene_length ?? '',
-        folderIds: workspace.folder_ids ?? []
+        folderIds: workspace.folder_ids ?? [],
+        lore: workspace.lore ?? []
       })
       setWorkspaceId(workspace.id)
       localStorage.setItem(LAST_WORKSPACE_KEY, workspace.id)
@@ -448,6 +452,7 @@ function ComposeInner() {
       graph: serializeGraph(nodes, edges),
       plot: composition.plot,
       folder_ids: composition.folderIds,
+      lore: composition.lore,
       ...(composition.targetTone ? { target_tone: composition.targetTone as CardTone } : { clear_target_tone: true }),
       ...(composition.promptPresetId
         ? { prompt_preset_id: composition.promptPresetId }
@@ -568,6 +573,18 @@ function ComposeInner() {
   const chain = useMemo(() => computeChain(nodes, edges), [nodes, edges])
   const selectedNode = nodes.find((node) => node.selected)
   const selectedNodeData = selectedNode ? (selectedNode.data as unknown as AnchorNodeData) : null
+  // アセットエリアで選択中のカード（配置済み・削除済みになったら自動で外れる）
+  const selectedAsset =
+    selectedAssetId && !placedIds.has(selectedAssetId) ? (cardById.get(selectedAssetId) ?? null) : null
+
+  // アセットのクリック = 選択（プロパティ表示）。キャンバス側のノード選択とパネルを取り合わない
+  // よう、アセットを選んだらノードの選択は外す（表示はノード優先のため）
+  const selectAsset = (cardId: string) => {
+    setSelectedAssetId(cardId)
+    setNodes((prev) =>
+      prev.some((node) => node.selected) ? prev.map((node) => (node.selected ? { ...node, selected: false } : node)) : prev
+    )
+  }
 
   // 現在のビューポート（カメラ）中央の空き位置（既存ノードと重なる場合はずらす）
   const nextFreePosition = () => {
@@ -752,6 +769,13 @@ function ComposeInner() {
   return (
     <div className="relative flex h-full">
       {nameDialog && <NameDialog state={nameDialog} onClose={() => setNameDialog(null)} />}
+      {loreOpen && (
+        <LoreEditor
+          lore={composition.lore}
+          onChange={(lore) => setComposition({ ...composition, lore })}
+          onClose={() => setLoreOpen(false)}
+        />
+      )}
 
       {/* 左: 作品（ワークスペース）一覧 */}
       <aside
@@ -892,7 +916,7 @@ function ComposeInner() {
         >
           <div className="flex items-center justify-between px-3 pt-2">
             <span className="text-[12px] font-semibold text-[var(--text-dim)]">
-              アセット（クリックまたはドラッグでキャンバスに配置）
+              アセット（ドラッグでキャンバスに配置。クリックで内容を確認）
             </span>
             <button
               onClick={() => addGapNode()}
@@ -916,14 +940,18 @@ function ComposeInner() {
               palette.map((card) => (
                 <button
                   key={card.id}
-                  onClick={() => addCardNode(card)}
+                  onClick={() => selectAsset(card.id)}
                   draggable
                   onDragStart={(event) => {
                     event.dataTransfer.setData(CARD_DND_TYPE, card.id)
                     event.dataTransfer.effectAllowed = 'move'
                   }}
                   title={card.title}
-                  className="flex w-28 shrink-0 cursor-grab flex-col overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-left hover:border-[var(--border-strong)] active:cursor-grabbing"
+                  className={`flex w-28 shrink-0 cursor-grab flex-col overflow-hidden rounded-md border text-left active:cursor-grabbing ${
+                    card.id === selectedAssetId
+                      ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+                      : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-strong)]'
+                  }`}
                 >
                   <span className="relative block h-16 w-full bg-[var(--bg-canvas)]">
                     {card.media_path ? (
@@ -1095,6 +1123,52 @@ function ComposeInner() {
           </div>
         )}
 
+        {/* アセットエリアで選択中のカード（ノード選択が無いときだけ表示） */}
+        {!selectedNode && selectedAsset && (
+          <div className="border-b border-[var(--border)]">
+            <div className="px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">カードのプロパティ</div>
+            <div className="space-y-2 px-3 pb-3">
+              {selectedAsset.media_path && (
+                <div className="relative overflow-hidden rounded bg-[var(--bg-canvas)]">
+                  <img
+                    src={`${cardFileUrl(selectedAsset.id, true)}&v=${encodeURIComponent(selectedAsset.updated_at)}`}
+                    alt=""
+                    className="block h-auto max-h-40 w-full object-contain"
+                    onError={(event) => {
+                      event.currentTarget.style.visibility = 'hidden'
+                    }}
+                  />
+                  {selectedAsset.media_type === 'video' && (
+                    <span className="absolute bottom-1 right-1 rounded bg-black/60 p-0.5 text-white/90">
+                      <IconFilm size={11} />
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{selectedAsset.title}</span>
+                {selectedAsset.role && (
+                  <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
+                    {ROLE_LABELS[selectedAsset.role]}
+                  </span>
+                )}
+              </div>
+              <p className="max-h-28 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--text-faint)]">
+                {selectedAsset.brief || '（ブリーフ未記入）'}
+              </p>
+              <button
+                onClick={() => addCardNode(selectedAsset)}
+                className="w-full rounded border border-[var(--border-strong)] px-2 py-1.5 text-[12px] text-[var(--text-dim)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
+              >
+                キャンバスに配置
+              </button>
+              <p className="text-[11px] text-[var(--text-faint)]">
+                アセットからキャンバスへ直接ドラッグでも配置できます。編集は Vault で行えます。
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="border-b border-[var(--border)] px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">
           生成設定
         </div>
@@ -1108,6 +1182,18 @@ function ComposeInner() {
               className={`${inputClass} leading-relaxed`}
             />
           </label>
+
+          <div className="block">
+            <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
+              背景設定（世界観・人物などの恒久設定。清書時に参照される）
+            </span>
+            <button
+              onClick={() => setLoreOpen(true)}
+              className="w-full rounded border border-[var(--border-strong)] bg-[var(--bg-input)] px-2 py-1.5 text-left text-[13px] text-[var(--text-dim)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
+            >
+              {composition.lore.length > 0 ? `${composition.lore.length} 件のメモを編集…` : 'メモを追加…'}
+            </button>
+          </div>
 
           <label className="block">
             <span className="mb-1 block text-[12px] text-[var(--text-dim)]">目標トーン（結末の着地。任意）</span>

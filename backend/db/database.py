@@ -160,6 +160,8 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         )
     if workspace_columns and "folder_ids" not in workspace_columns:
         conn.execute("ALTER TABLE workspaces ADD COLUMN folder_ids TEXT NOT NULL DEFAULT '[]'")
+    if workspace_columns and "lore" not in workspace_columns:
+        conn.execute("ALTER TABLE workspaces ADD COLUMN lore TEXT NOT NULL DEFAULT '[]'")
 
     cards_column_names = {row["name"] for row in conn.execute("PRAGMA table_info(cards)")}
     if cards_column_names and "folder_id" not in cards_column_names:

@@ -26,6 +26,14 @@ class WorkspaceCreateInput(BaseModel):
     name: str = Field(min_length=1, max_length=60)
 
 
+class LoreMemo(BaseModel):
+    """背景設定メモ（作品の恒久設定 = canon）。清書時に全文注入する（goals.md 設定資料 RAG の Phase 1）。"""
+
+    id: str
+    title: str = Field(max_length=60)
+    body: str = ""
+
+
 class WorkspaceUpdateInput(BaseModel):
     name: str | None = Field(default=None, max_length=60)
     graph: dict | None = None
@@ -37,6 +45,7 @@ class WorkspaceUpdateInput(BaseModel):
     scene_length: Literal["short", "standard", "long"] | None = None
     clear_scene_length: bool = False
     folder_ids: list[str] | None = None  # この作品で使うフォルダ（None = 変更なし。ルートは常時使用）
+    lore: list[LoreMemo] | None = None  # 背景設定メモ（None = 変更なし）
 
 
 def _now() -> str:
@@ -54,6 +63,11 @@ def _row_to_workspace(row: sqlite3.Row) -> dict:
         workspace["folder_ids"] = folder_ids if isinstance(folder_ids, list) else []
     except (json.JSONDecodeError, TypeError):
         workspace["folder_ids"] = []
+    try:
+        lore = json.loads(workspace.get("lore") or "[]")
+        workspace["lore"] = lore if isinstance(lore, list) else []
+    except (json.JSONDecodeError, TypeError):
+        workspace["lore"] = []
     return workspace
 
 
@@ -129,10 +143,15 @@ def update_workspace(workspace_id: str, payload: WorkspaceUpdateInput) -> dict:
         folder_ids = (
             json.dumps(payload.folder_ids) if payload.folder_ids is not None else (current["folder_ids"] or "[]")
         )
+        lore = (
+            json.dumps([memo.model_dump() for memo in payload.lore], ensure_ascii=False)
+            if payload.lore is not None
+            else (current["lore"] or "[]")
+        )
         conn.execute(
             "UPDATE workspaces SET name = ?, graph = ?, plot = ?, target_tone = ?, prompt_preset_id = ?,"
-            " scene_length = ?, folder_ids = ?, updated_at = ? WHERE id = ?",
-            (name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, _now(), workspace_id),
+            " scene_length = ?, folder_ids = ?, lore = ?, updated_at = ? WHERE id = ?",
+            (name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, lore, _now(), workspace_id),
         )
         conn.commit()
         return _row_to_workspace(_get_row(conn, workspace_id))
@@ -149,8 +168,9 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
         now = _now()
         conn.execute(
             "INSERT INTO workspaces"
-            " (id, name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " (id, name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, lore,"
+            " created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 new_id,
                 payload.name.strip(),
@@ -160,6 +180,7 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
                 source["prompt_preset_id"],
                 source["scene_length"],
                 source["folder_ids"] or "[]",
+                source["lore"] or "[]",
                 now,
                 now,
             ),

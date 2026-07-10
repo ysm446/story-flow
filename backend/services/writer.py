@@ -58,10 +58,11 @@ def write_scene(
     system_prompt: str,
     scene_length: str | None = None,
     instruction: str | None = None,
+    lore: list[dict] | None = None,
 ) -> tuple[str, StoryState]:
     """カード 1 枚を清書し、(prose, 更新後 StoryState) を返す。"""
     system = f"{system_prompt.strip()}\n\n{OUTPUT_FORMAT_INSTRUCTION}"
-    user = _build_user_prompt(card, state, plot, target_tone, position, scene_length, instruction)
+    user = _build_user_prompt(card, state, plot, target_tone, position, scene_length, instruction, lore=lore)
 
     result = chat_completion_json(base_url, system, user)
     return _parse_writer_result(result, state)
@@ -78,6 +79,7 @@ def write_scene_stream(
     scene_length: str | None = None,
     instruction: str | None = None,
     image_data_url: str | None = None,
+    lore: list[dict] | None = None,
 ):
     """write_scene のストリーミング版 generator。
 
@@ -86,7 +88,15 @@ def write_scene_stream(
     """
     system = f"{system_prompt.strip()}\n\n{OUTPUT_FORMAT_INSTRUCTION}"
     user = _build_user_prompt(
-        card, state, plot, target_tone, position, scene_length, instruction, with_image=image_data_url is not None
+        card,
+        state,
+        plot,
+        target_tone,
+        position,
+        scene_length,
+        instruction,
+        with_image=image_data_url is not None,
+        lore=lore,
     )
 
     images = [image_data_url] if image_data_url else None
@@ -119,10 +129,24 @@ def _build_user_prompt(
     scene_length: str | None = None,
     instruction: str | None = None,
     with_image: bool = False,
+    lore: list[dict] | None = None,
 ) -> str:
     parts: list[str] = []
     if plot.strip():
         parts.append(f"## 物語全体のプロット\n{plot.strip()}")
+
+    # 背景設定（作品の恒久設定 = canon）。StoryState（一話内の発生事実）とは別レイヤ。
+    # Phase 1 は全文注入（goals.md 設定資料 RAG。長文化したら関連チャンク検索に進化させる）
+    lore_sections = [
+        f"### {str(memo.get('title', '')).strip() or '(無題)'}\n{str(memo.get('body', '')).strip()}"
+        for memo in (lore or [])
+        if str(memo.get("body", "")).strip()
+    ]
+    if lore_sections:
+        parts.append(
+            "## 背景設定（この作品の恒久的な設定。全シーンで一貫させ、矛盾させない）\n"
+            + "\n\n".join(lore_sections)
+        )
 
     parts.append(
         "## これまでの確定事実（StoryState）\n"
