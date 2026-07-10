@@ -6,6 +6,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   addEdge,
   useEdgesState,
   useNodesState,
@@ -605,28 +606,34 @@ function ComposeInner() {
     ])
   }
 
-  // キャンバスのショートカット（キャンバス内にフォーカスがあるときのみ届く）:
-  // A = ネットワーク全体を表示 / F = 選択中のノードにフォーカス
-  const onCanvasKeyDown = (event: React.KeyboardEvent) => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return
-    const target = event.target as HTMLElement
-    if (target.closest('input, textarea, select, [contenteditable="true"]')) return
-    const key = event.key.toLowerCase()
-    if (key === 'a') {
-      event.preventDefault()
-      void reactFlow.fitView({ padding: 0.15, duration: 300 })
-    } else if (key === 'f') {
-      const selected = nodes.filter((node) => node.selected)
-      if (selected.length === 0) return
-      event.preventDefault()
-      void reactFlow.fitView({
-        nodes: selected.map((node) => ({ id: node.id })),
-        padding: 0.4,
-        maxZoom: 1.2,
-        duration: 300
-      })
+  // キャンバスのショートカット: A = ネットワーク全体を表示 / F = 選択中のノードにフォーカス。
+  // ノードを選択していなくても効くよう window で拾う（Compose 表示中のみ。
+  // 入力欄へのタイプ中・修飾キー押下時は無視）
+  useEffect(() => {
+    if (phase !== 'compose') return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const key = event.key.toLowerCase()
+      if (key === 'a') {
+        event.preventDefault()
+        void reactFlow.fitView({ padding: 0.15, duration: 300 })
+      } else if (key === 'f') {
+        const selected = nodes.filter((node) => node.selected)
+        if (selected.length === 0) return
+        event.preventDefault()
+        void reactFlow.fitView({
+          nodes: selected.map((node) => ({ id: node.id })),
+          padding: 0.4,
+          maxZoom: 1.2,
+          duration: 300
+        })
+      }
     }
-  }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [phase, nodes, reactFlow])
 
   // アセットエリアからのドラッグ&ドロップ配置（ドロップ位置にノードの中心を合わせる）
   const onCanvasDragOver = (event: React.DragEvent) => {
@@ -826,7 +833,6 @@ function ComposeInner() {
           className="relative min-h-0 flex-1"
           onDragOver={onCanvasDragOver}
           onDrop={onCanvasDrop}
-          onKeyDown={onCanvasKeyDown}
         >
           <ReactFlow
             nodes={nodes}
@@ -836,6 +842,9 @@ function ComposeInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             deleteKeyCode={['Delete', 'Backspace']}
+            selectionOnDrag
+            selectionMode={SelectionMode.Partial}
+            panOnDrag={[1, 2]}
             minZoom={0.2}
             maxZoom={1.5}
             fitView
