@@ -412,6 +412,21 @@ export function TheaterPhase() {
               key={story.id}
               className="flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-4 py-3"
             >
+              {/* サムネイル: メディア付きの最初のシーン。メディアの無い物語はグラデーション */}
+              <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-gradient-to-br from-[#1a1d2e] to-[#0d0f14]">
+                {story.thumb_card_id && (
+                  <img
+                    src={cardFileUrl(story.thumb_card_id, true)}
+                    alt=""
+                    loading="lazy"
+                    draggable={false}
+                    className="h-full w-full object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.visibility = 'hidden'
+                    }}
+                  />
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px]">{story.plot || '（プロットなし）'}</div>
                 <div className="mt-0.5 flex items-center gap-2 text-[12px] text-[var(--text-faint)]">

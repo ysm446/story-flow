@@ -14,7 +14,11 @@ def list_stories(workspace_id: str | None = None) -> dict:
     conn = get_connection()
     try:
         base_sql = (
-            "SELECT s.*, (SELECT COUNT(*) FROM story_scenes sc WHERE sc.story_id = s.id) AS scene_count"
+            "SELECT s.*, (SELECT COUNT(*) FROM story_scenes sc WHERE sc.story_id = s.id) AS scene_count,"
+            # サムネイル用: メディア付きカードを使う最初のシーン（削除済み・メディア無しは飛ばす）
+            " (SELECT sc.card_id FROM story_scenes sc JOIN cards c ON c.id = sc.card_id"
+            "  WHERE sc.story_id = s.id AND c.media_path IS NOT NULL"
+            "  ORDER BY sc.position LIMIT 1) AS thumb_card_id"
             " FROM stories s"
         )
         if workspace_id:

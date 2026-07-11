@@ -99,6 +99,8 @@ export interface StorySummary {
   parent_story_id: string | null
   scene_count: number
   created_at: string
+  /** サムネイル用: メディア付きカードを使う最初のシーンのカード ID（無ければ null） */
+  thumb_card_id: string | null
 }
 
 export interface WorkspaceGraphNode {
