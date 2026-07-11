@@ -70,6 +70,9 @@ const DEFAULT_ASSET_HEIGHT = 240
 const CARD_DND_TYPE = 'application/x-story-flow-card'
 const GAP_DND_TYPE = 'application/x-story-flow-gap'
 
+// アセットエリア先頭のおまかせスロット疑似カードの選択 ID（カード ID と衝突しない値）
+const GAP_ASSET_ID = '__gap__'
+
 interface NameDialogState {
   title: string
   defaultValue: string
@@ -925,20 +928,28 @@ function ComposeInner() {
             <span className="text-[12px] font-semibold text-[var(--text-dim)]">
               アセット（ドラッグでキャンバスに配置。クリックで内容を確認）
             </span>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-wrap content-start gap-2 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-2">
+            {/* 先頭常設: おまかせスロット疑似カード（配置しても消えない。何個でも置ける） */}
             <button
-              onClick={() => addGapNode()}
+              onClick={() => selectAsset(GAP_ASSET_ID)}
               draggable
               onDragStart={(event) => {
                 event.dataTransfer.setData(GAP_DND_TYPE, '1')
                 event.dataTransfer.effectAllowed = 'move'
               }}
-              title="生成時に LLM が在庫から 1 枚選んで埋めるスロットを置く（始点・終点にはできません）"
-              className="flex items-center gap-1 rounded border border-dashed border-[var(--border-strong)] px-2 py-1 text-[11px] text-[var(--text-dim)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
+              title="生成時に LLM が在庫から 1 枚選んで埋めるスロット（何個でも配置可。始点・終点にはできません）"
+              className={`flex w-28 shrink-0 cursor-grab flex-col overflow-hidden rounded-md border border-dashed text-left active:cursor-grabbing ${
+                selectedAssetId === GAP_ASSET_ID
+                  ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+                  : 'border-[var(--border-strong)] bg-[var(--bg-card)] hover:border-[var(--accent-border)]'
+              }`}
             >
-              <IconPlus size={11} /> おまかせスロット
+              <span className="flex h-16 w-full items-center justify-center bg-[var(--bg-canvas)] text-[20px] text-[var(--text-faint)]">
+                ？
+              </span>
+              <span className="truncate px-1.5 py-1 text-[11px] text-[var(--text-dim)]">おまかせスロット</span>
             </button>
-          </div>
-          <div className="flex min-h-0 flex-1 flex-wrap content-start gap-2 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-2">
             {palette.length === 0 ? (
               <div className="py-4 text-[12px] text-[var(--text-faint)]">
                 {allCards.length === 0 ? 'Vault でカードを登録してください。' : 'すべて配置済みです。'}
@@ -1126,6 +1137,36 @@ function ComposeInner() {
                   </span>
                 )}
               </label>
+            </div>
+          </div>
+        )}
+
+        {/* アセットエリアで選択中のおまかせスロット（ノード選択が無いときだけ表示） */}
+        {!selectedNode && selectedAssetId === GAP_ASSET_ID && (
+          <div className="border-b border-[var(--border)]">
+            <div className="px-3 py-2.5 text-[13px] font-semibold text-[var(--text-dim)]">おまかせスロット</div>
+            <div className="space-y-2 px-3 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded border border-dashed border-[var(--border-strong)] text-[15px] text-[var(--text-faint)]">
+                  ？
+                </span>
+                <span className="min-w-0 flex-1 text-[11px] leading-relaxed text-[var(--text-faint)]">
+                  生成時に、前後のシーンの流れに合うカードを在庫から LLM が 1 枚選んで埋めます。
+                </span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">
+                何個でも配置できます（始点・終点は不可）。希望ロール・追加指示・BGM の指名は、
+                配置したノードを選択してプロパティで設定します。
+              </p>
+              <button
+                onClick={() => addGapNode()}
+                className="w-full rounded border border-[var(--border-strong)] px-2 py-1.5 text-[12px] text-[var(--text-dim)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
+              >
+                キャンバスに配置
+              </button>
+              <p className="text-[11px] text-[var(--text-faint)]">
+                アセットからキャンバスへ直接ドラッグでも配置できます。
+              </p>
             </div>
           </div>
         )}
