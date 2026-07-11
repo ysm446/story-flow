@@ -576,6 +576,11 @@
   no-cache + ETag 再検証（未変更は 304）に統一。検証: py_compile / TestClient で
   no-cache 付与・If-None-Match→304・画像→動画差し替え E2E すべて PASS
 
+- 2026-07-11: **分岐ノード（選択肢）を v2 筆頭アイデアとして起票**（作者提案。未実装）—
+  Compose で出力エッジ複数 = 選択肢、Theater が分岐点で選択を待つ ADV 風再生。
+  最小形は「木のみ・合流なし・選択肢はエッジのプロパティ」。
+  詳細: [docs/design/branch-nodes.md](../design/branch-nodes.md)、plan.md に項目追加
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）
