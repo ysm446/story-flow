@@ -9,6 +9,7 @@ import {
   SelectionMode,
   addEdge,
   useEdgesState,
+  useNodesInitialized,
   useNodesState,
   useReactFlow,
   type Connection,
@@ -324,6 +325,8 @@ function ComposeInner() {
   const [assetHeight, setAssetHeight] = useState(DEFAULT_ASSET_HEIGHT)
   const hydrated = useRef(false)
   const reactFlow = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
+  const fitPendingRef = useRef(false)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const cardById = useMemo(() => new Map(allCards.map((card) => [card.id, card])), [allCards])
@@ -344,9 +347,21 @@ function ComposeInner() {
       setWorkspaceId(workspace.id)
       localStorage.setItem(LAST_WORKSPACE_KEY, workspace.id)
       hydrated.current = true
+      fitPendingRef.current = true // 読み込んだ作品の全ノードが収まるように表示する
     },
     [setNodes, setEdges, setComposition, setWorkspaceId]
   )
+
+  // 作品を読み込んだ直後は全体をフィット表示する。Compose が非表示（display:none）の間は
+  // フィットできない（キャンバスのサイズが 0）ため、タブが表示されるまで持ち越す。
+  // ノードのサイズ測定を待ってから 1 フレーム遅らせて実行する
+  useEffect(() => {
+    if (!fitPendingRef.current || phase !== 'compose') return
+    if (nodes.length > 0 && !nodesInitialized) return
+    fitPendingRef.current = false
+    if (nodes.length === 0) return
+    window.setTimeout(() => void reactFlow.fitView({ padding: 0.15, duration: 300 }), 0)
+  }, [phase, nodes, nodesInitialized, reactFlow])
 
   // 初期化: カード + ワークスペース一覧を読み、前回のワークスペース（無ければ作成）を開く
   useEffect(() => {

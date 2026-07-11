@@ -7,6 +7,7 @@ import {
   ReactFlowProvider,
   SelectionMode,
   useEdgesState,
+  useNodesInitialized,
   useNodesState,
   useReactFlow,
   type Edge,
@@ -194,6 +195,8 @@ function GenerateInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const abortRef = useRef<AbortController | null>(null)
   const reactFlow = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
+  const fitPendingRef = useRef(false)
 
   // アンマウント（実質アプリ終了）時に進行中のストリームを畳む
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -284,6 +287,7 @@ function GenerateInner() {
       )
       setCurrentTakeId(storyId)
       setError(null)
+      fitPendingRef.current = true // 表示したテイクの全ノードが収まるように表示する
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
@@ -550,6 +554,18 @@ function GenerateInner() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneViews, composeNodes, isRunning, currentTakeId, handleRegenerate, cardById, bgmTitleById, computeLayout])
+
+  // テイクを表示した直後は全体をフィット表示する。Generate が非表示（display:none）の間は
+  // フィットできない（キャンバスのサイズが 0）ため、タブが表示されるまで持ち越す。
+  // sceneViews → ノードの同期とサイズ測定を待ってから 1 フレーム遅らせて実行する
+  useEffect(() => {
+    if (!fitPendingRef.current || phase !== 'generate') return
+    if (nodes.length !== sceneViews.length) return
+    if (nodes.length > 0 && !nodesInitialized) return
+    fitPendingRef.current = false
+    if (nodes.length === 0) return
+    window.setTimeout(() => void reactFlow.fitView({ padding: 0.2, duration: 300 }), 0)
+  }, [phase, nodes, nodesInitialized, sceneViews.length, reactFlow])
 
   // 「整列」: ドラッグでの位置上書きを捨て、重なり緩和レイアウトに並べ直す
   const handleAlign = useCallback(() => {
