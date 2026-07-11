@@ -567,6 +567,15 @@
   検証: py_compile / 実ライブラリで None→36 枚・[]→ルート 20 枚・フォルダ指定→
   ルート∪サブツリーを確認 / build 成功。vault-folders.md にも修正を記録
 
+- 2026-07-11: **修正 — 画像で保存したカードを動画に差し替えると反映されないように見える**
+  （作者報告）— 原因はサーバではなく Chromium の HTTP キャッシュ。メディア URL は
+  差し替え後も同じで、配信レスポンスに Cache-Control が無くヒューリスティック
+  キャッシュが古い内容を返していた（`&v=updated_at` バスター付きの Vault グリッド等は
+  無事で、バスター無しの Compose/Generate ノード・Theater・動画原本で発症）。
+  `backend/routes/media_files.py` を新設し、カード/サムネ/BGM 配信を
+  no-cache + ETag 再検証（未変更は 304）に統一。検証: py_compile / TestClient で
+  no-cache 付与・If-None-Match→304・画像→動画差し替え E2E すべて PASS
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）

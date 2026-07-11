@@ -13,12 +13,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlite_vec import serialize_float32
 
 from backend.db.database import EMBED_DIM, get_connection, resolve_path
+from backend.routes.media_files import media_file_response
 from backend.services.embedding import EmbeddingUnavailable, embed_text
 from backend.services.media import save_media, thumb_relative_for
 
@@ -404,7 +405,7 @@ async def upload_media(card_id: str, file: UploadFile = File(...)) -> dict:
 
 
 @router.get("/cards/{card_id}/file")
-def get_card_file(card_id: str, thumb: int = 0) -> FileResponse:
+def get_card_file(card_id: str, request: Request, thumb: int = 0) -> Response:
     conn = get_connection()
     try:
         row = _get_card_row(conn, card_id)
@@ -418,7 +419,7 @@ def get_card_file(card_id: str, thumb: int = 0) -> FileResponse:
     if thumb:
         thumb_path = resolve_path(thumb_relative_for(media_relative))
         if thumb_path.exists():
-            return FileResponse(thumb_path)
+            return media_file_response(thumb_path, request)
         # サムネイル未生成の画像は原本で代替する
         if row["media_type"] != "image":
             raise HTTPException(status_code=404, detail="thumbnail not available")
@@ -426,4 +427,4 @@ def get_card_file(card_id: str, thumb: int = 0) -> FileResponse:
     media_path = resolve_path(media_relative)
     if not media_path.exists():
         raise HTTPException(status_code=404, detail="media file not found")
-    return FileResponse(media_path)
+    return media_file_response(media_path, request)

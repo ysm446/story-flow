@@ -15,12 +15,13 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlite_vec import serialize_float32
 
 from backend.db.database import EMBED_DIM, get_connection, resolve_path
+from backend.routes.media_files import media_file_response
 from backend.services.embedding import EmbeddingUnavailable, embed_text
 from backend.services.media import save_audio
 
@@ -225,7 +226,7 @@ async def upload_bgm_media(bgm_id: str, file: UploadFile = File(...)) -> dict:
 
 
 @router.get("/bgm/{bgm_id}/file")
-def get_bgm_file(bgm_id: str) -> FileResponse:
+def get_bgm_file(bgm_id: str, request: Request) -> Response:
     conn = get_connection()
     try:
         row = _get_bgm_row(conn, bgm_id)
@@ -238,4 +239,4 @@ def get_bgm_file(bgm_id: str) -> FileResponse:
     media_path = resolve_path(media_relative)
     if not media_path.exists():
         raise HTTPException(status_code=404, detail="audio file not found")
-    return FileResponse(media_path)
+    return media_file_response(media_path, request)
