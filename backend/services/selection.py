@@ -55,13 +55,15 @@ def load_inventory(exclude: set[str], folder_ids: list[str] | None = None) -> li
 
     folder_ids を指定すると「ルート(folder_id IS NULL)∪ 指定フォルダのサブツリー」に絞る。
     ルートは全作品共有の共通素材として常に含まれる(docs/design/gap-fill-selection.md)。
-    未指定(空)は従来どおり全カード(フォルダ機能を使っていないライブラリと挙動を揃える)。
+    **空リストはルートのみ**(Compose「使うフォルダ」のチェックなし = アセット一覧の
+    見え方と一致させる。2026-07-11 修正)。None は従来どおり全カード
+    (フォルダ機能を使わない API 直叩きとの互換)。
     """
     from backend.routes.folders import expand_folder_ids  # 循環 import 回避のため遅延
 
     conn = get_connection()
     try:
-        if folder_ids:
+        if folder_ids is not None:
             allowed = expand_folder_ids(conn, folder_ids)
             placeholders = ",".join("?" * len(allowed)) if allowed else "NULL"
             rows = conn.execute(

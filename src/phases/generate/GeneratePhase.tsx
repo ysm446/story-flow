@@ -366,7 +366,9 @@ function GenerateInner() {
           scene_length: composition.sceneLength || null,
           include_images: uiSettings.generateIncludeImages && settings.supportsVision,
           include_bgm: uiSettings.theaterBgmEnabled,
-          folder_ids: composition.folderIds.length > 0 ? composition.folderIds : null,
+          // 空配列も必ず送る（空 = ルートのみ。null にすると backend が「全カード」互換挙動になり、
+          // チェックなしのときにアセット一覧に見えないフォルダのカードをおまかせが引いてしまう）
+          folder_ids: composition.folderIds,
           base_story_id: options.baseStoryId,
           start_position: options.startPosition,
           mode: options.mode
