@@ -533,6 +533,15 @@
   ライブラリ状態の取得に必要なため残置、backendHealthy state のみ削除）。
   検証: build 成功。表示はアプリ確認待ち
 
+- 2026-07-11: **fill_gap のクエリベクトルを内分点方式に**（作者と協議。v1.5 多様性
+  チューニングの一環）— 連続する穴で毎回 A/B の中点を検索していたのを、
+  t = 1/(次の固定アンカーまでの残り穴数+1) の内分点 (1-t)·A + t·B に変更
+  （A〇〇〇B なら t = 1/4 → 1/3 → 1/2 と B 寄りへ滑る。単独の穴は t=1/2 で従来どおり）。
+  生成順は左から逐次のまま（再帰なし）、追加の LLM・埋め込み呼び出しなし。
+  pipeline に `_gaps_until_anchor`、selection に blend_toward_next / gaps_until_anchor を追加。
+  設計資料 gap-fill-selection.md 更新。検証: py_compile + 穴カウント・按分式の単体確認 PASS。
+  実 LLM + 実ベクトルでの効き具合は次回生成で確認
+
 ## 未完了（plan.md の作業順序に従う）
 
 - [x] フェーズ 1: Vault（CRUD / メディア / タグ・ロール / 埋め込み / stats）

@@ -120,6 +120,7 @@ def generate_stream(
                 used_ids,
                 base_url=selector_base_url,
                 plot=plot,
+                gaps_until_anchor=_gaps_until_anchor(slots, index),
             )
             yield {
                 "type": "selected",
@@ -191,6 +192,20 @@ def _next_fixed_card(slots: list[dict], index: int) -> dict | None:
         if slot.get("kind") != "gap" and slot.get("card"):
             return slot["card"]
     return None
+
+
+def _gaps_until_anchor(slots: list[dict], index: int) -> int:
+    """index から次の固定アンカーまでに連続する gap の数（index 自身を含む）。
+
+    クエリベクトルの内分点 t = 1/(この値+1) に使う。A〇〇〇B の 1 つ目の穴は 3
+    （t=1/4 で A 寄り）、確定が進むごとに 2, 1 と減って B 寄りになる。単独の穴は 1（t=1/2 = 中点）。
+    """
+    count = 0
+    for slot in slots[index:]:
+        if slot.get("kind") != "gap":
+            break
+        count += 1
+    return count
 
 
 def save_story(

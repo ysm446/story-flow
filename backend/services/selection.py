@@ -87,8 +87,15 @@ def fill_gap(
     base_url: str,
     system_prompt: str | None = None,
     plot: str = "",
+    gaps_until_anchor: int = 1,
 ) -> tuple[dict, str]:
-    """(選んだカード 1 枚, 理由) を返す。在庫が空のときは LlmError。"""
+    """(選んだカード 1 枚, 理由) を返す。在庫が空のときは LlmError。
+
+    gaps_until_anchor: この穴から次の固定アンカー B までに連続する穴の数（自分を含む）。
+    クエリベクトルを A と B の内分点 t = 1/(残り穴数+1) にするために使う。
+    単独の穴は t = 1/2（従来の中点）。穴が連続すると最初の穴ほど A 寄りになり、
+    確定が進むにつれて B 寄りへ滑っていく。
+    """
     if not inventory:
         raise LlmError(
             "穴埋めに使えるカードが残っていません。"
@@ -97,6 +104,7 @@ def fill_gap(
     candidates = retrieve_candidates(
         state, prev_card, next_anchor, target_role, target_tone,
         k=CANDIDATE_K, penalize=used_ids, inventory=inventory,
+        blend_toward_next=1.0 / (max(1, gaps_until_anchor) + 1),
     )
     if not candidates:
         candidates = inventory[:CANDIDATE_K]
@@ -118,8 +126,9 @@ def retrieve_candidates(
     k: int = CANDIDATE_K,
     penalize: set[str] | None = None,
     inventory: list[dict] | None = None,
+    blend_toward_next: float = 0.5,
 ) -> list[dict]:
-    """ベクトル(A/B の中間)+ ロールのスコアボーナスで候補 k 件に絞る。
+    """ベクトル(A/B の内分点。既定は中点)+ ロールのスコアボーナスで候補 k 件に絞る。
 
     埋め込みが一切使えない場合は、ロール優先 + ランダムの候補に劣化する。
     """
@@ -132,7 +141,7 @@ def retrieve_candidates(
     if len(allowed) <= k:
         return list(allowed.values())
 
-    query_vector = _gap_query_vector(prev_card, next_anchor, state, target_tone)
+    query_vector = _gap_query_vector(prev_card, next_anchor, state, target_tone, blend_toward_next)
     if query_vector is None:
         return _fallback_candidates(list(allowed.values()), target_role, k)
 
@@ -266,22 +275,23 @@ def _gap_query_vector(
     next_anchor: dict | None,
     state: StoryState,
     target_tone: str | None,
+    blend_toward_next: float = 0.5,
 ) -> list[float] | None:
-    """A と B の保存済み埋め込みの中点。無ければ合成テキストを埋め込む。どちらも不可なら None。"""
+    """A と B の保存済み埋め込みの内分点 (1-t)·A + t·B（t = blend_toward_next、既定は中点）。
+    無ければ合成テキストを埋め込む。どちらも不可なら None。"""
     conn = get_connection()
     try:
-        vectors = []
-        for card in (prev_card, next_anchor):
-            if card and card.get("id"):
-                vector = _stored_embedding(conn, card["id"])
-                if vector is not None:
-                    vectors.append(vector)
+        prev_vec = _stored_embedding(conn, prev_card["id"]) if prev_card and prev_card.get("id") else None
+        next_vec = _stored_embedding(conn, next_anchor["id"]) if next_anchor and next_anchor.get("id") else None
     finally:
         conn.close()
-    if len(vectors) == 2:
-        return [(a + b) / 2.0 for a, b in zip(vectors[0], vectors[1])]
-    if len(vectors) == 1:
-        return vectors[0]
+    if prev_vec is not None and next_vec is not None:
+        t = min(1.0, max(0.0, blend_toward_next))
+        return [(1.0 - t) * a + t * b for a, b in zip(prev_vec, next_vec)]
+    if prev_vec is not None:
+        return prev_vec
+    if next_vec is not None:
+        return next_vec
 
     text_parts = [card.get("brief") for card in (prev_card, next_anchor) if card]
     text_parts.extend([state.tone_so_far, target_tone])
