@@ -227,6 +227,33 @@ export function SettingsPanel({
           </div>
           <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
             <div className="flex items-center justify-between">
+              <span className="text-[13px]">本文の表示高さ</span>
+              <span className="font-mono text-[12px] text-[var(--text-dim)]">{settings.theaterTextHeightPct}%</span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="range"
+                min={10}
+                max={60}
+                step={5}
+                value={settings.theaterTextHeightPct}
+                onChange={(event) => updateSettings({ theaterTextHeightPct: Number(event.target.value) })}
+                className="slider min-w-0 flex-1"
+              />
+              <button
+                onClick={() => updateSettings({ theaterTextHeightPct: 25 })}
+                disabled={settings.theaterTextHeightPct === 25}
+                className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-0.5 text-[11px] text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
+              >
+                リセット
+              </button>
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--text-faint)]">
+              ステージの高さに対する割合。収まらない本文はスクロール表示になる
+            </div>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5">
+            <div className="flex items-center justify-between">
               <span className="text-[13px]">再生ステージのサイズ</span>
               <span className="font-mono text-[12px] text-[var(--text-dim)]">{settings.theaterStageScale}%</span>
             </div>

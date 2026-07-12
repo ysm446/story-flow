@@ -648,20 +648,26 @@ function StoryPlayer({
   const scale = uiSettings.theaterStageScale / 100
   const availW = containerSize.w * scale
   const availH = containerSize.h * scale
-  let stageStyle: CSSProperties
+  let stageW: number
+  let stageH: number
   if (aspectRatio === null) {
-    stageStyle = { width: availW, height: availH }
+    stageW = availW
+    stageH = availH
   } else {
     // 比率を保ったまま avail に収める（width = min(availW, availH * ratio)）
-    const width = Math.min(availW, availH * aspectRatio)
-    stageStyle = { width, height: width / aspectRatio }
+    stageW = Math.min(availW, availH * aspectRatio)
+    stageH = stageW / aspectRatio
   }
+  const stageStyle: CSSProperties = { width: stageW, height: stageH }
   const fitClass = uiSettings.theaterFitMode === 'contain' ? 'object-contain' : 'object-cover'
 
   // 本文スクロール時に行が上下端で中途半端に切れて見えないよう、1 行ぶん（leading-[2]）を
   // フェードで消す。同じ高さの内側パディングを足し、スクロールなし時は本文がフェードに掛からない
   const textFadePx = uiSettings.theaterFontSizePx * 2
   const textFadeMask = `linear-gradient(to bottom, transparent 0, black ${textFadePx}px, black calc(100% - ${textFadePx}px), transparent 100%)`
+  // 本文表示エリアの最大高さ = ステージ高さ ×（設定 %）。ウィンドウでなくステージ基準に
+  // することで、縦横比指定の額縁や全画面でも見た目の割合が保たれる
+  const textMaxHeightPx = stageH * (uiSettings.theaterTextHeightPct / 100) + textFadePx * 2
 
   return (
     <div
@@ -729,7 +735,7 @@ function StoryPlayer({
             ref={textRef}
             className="no-scrollbar mx-auto max-w-2xl overflow-y-auto"
             style={{
-              maxHeight: `calc(25vh + ${textFadePx * 2}px)`,
+              maxHeight: textMaxHeightPx,
               padding: `${textFadePx}px 0`,
               maskImage: textFadeMask,
               WebkitMaskImage: textFadeMask
