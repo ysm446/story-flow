@@ -1,7 +1,7 @@
 # progress.md — 進捗
 
 作成日時: 2026-07-08 16:39
-更新日時: 2026-07-11 00:00
+更新日時: 2026-07-12 12:07
 
 ## 現在地
 
@@ -580,6 +580,17 @@
   Compose で出力エッジ複数 = 選択肢、Theater が分岐点で選択を待つ ADV 風再生。
   最小形は「木のみ・合流なし・選択肢はエッジのプロパティ」。
   詳細: [docs/design/branch-nodes.md](../design/branch-nodes.md)、plan.md に項目追加
+
+- 2026-07-12: **おまかせの経路「直行 / 寄り道」**（作者要望「A→B へ直行せず寄り道
+  しながら / 徐々に段階を進めてほしい」）— 作品設定に gap_route プルダウンを追加
+  （workspaces.gap_route、NULL = direct = 従来）。detour は (1) リング検索: 候補
+  スコアに A/B 近傍ペナルティ（足踏み・先回りを抑制。最後の穴では B 側を解除）、
+  (2) 行程プロンプト: selector に「n 個中 i 番目」と段階指示（序盤 = 広げる /
+  後半 = 舵を切る / 最後 = 収束）。多様性チューニング（v1.5 残課題）の一部。
+  詳細: [docs/design/gap-fill-selection.md](../design/gap-fill-selection.md) 経路モード節。
+  検証: py_compile / build / 一時ライブラリで workspaces API 往復（保存・複製・
+  クリア・不正値 422）・_gap_run_info・行程プロンプト出し分け・埋め込み無し劣化
+  すべて PASS。実 LLM での効き具合はアプリ確認待ち
 
 ## 未完了（plan.md の作業順序に従う）
 

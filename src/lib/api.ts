@@ -138,6 +138,9 @@ export interface WorkspaceSummary {
 
 export type SceneLength = 'short' | 'standard' | 'long'
 
+/** おまかせの経路。direct = 直行（A→B 最短で橋渡し）、detour = 寄り道（広げてから B へ収束） */
+export type GapRoute = 'direct' | 'detour'
+
 /** 背景設定メモ（作品の恒久設定 = canon）。清書時に全文注入される */
 export interface LoreMemo {
   id: string
@@ -153,6 +156,7 @@ export interface Workspace {
   target_tone: CardTone | null
   prompt_preset_id: string | null
   scene_length: SceneLength | null
+  gap_route: GapRoute | null
   folder_ids: string[] // この作品で使うフォルダ（ルートは常時使用。選択はサブツリーを含む）
   lore: LoreMemo[]
   created_at: string
@@ -169,6 +173,8 @@ export interface WorkspaceUpdateInput {
   clear_prompt_preset?: boolean
   scene_length?: SceneLength | null
   clear_scene_length?: boolean
+  gap_route?: GapRoute | null
+  clear_gap_route?: boolean
   folder_ids?: string[]
   lore?: LoreMemo[]
 }
@@ -252,6 +258,7 @@ export interface GenerateInput {
   workspace_id: string | null
   prompt_preset_id: string | null
   scene_length: SceneLength | null
+  gap_route: GapRoute | null
   include_images: boolean
   include_bgm: boolean
   folder_ids: string[] | null

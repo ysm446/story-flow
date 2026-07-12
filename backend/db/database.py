@@ -158,6 +158,11 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             "ALTER TABLE workspaces ADD COLUMN scene_length TEXT"
             " CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL)"
         )
+    if workspace_columns and "gap_route" not in workspace_columns:
+        conn.execute(
+            "ALTER TABLE workspaces ADD COLUMN gap_route TEXT"
+            " CHECK(gap_route IN ('direct','detour') OR gap_route IS NULL)"
+        )
     if workspace_columns and "folder_ids" not in workspace_columns:
         conn.execute("ALTER TABLE workspaces ADD COLUMN folder_ids TEXT NOT NULL DEFAULT '[]'")
     if workspace_columns and "lore" not in workspace_columns:

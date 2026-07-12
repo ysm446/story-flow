@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import type { CardRole, CardTone, LoreMemo, SceneLength } from '../lib/api'
+import type { CardRole, CardTone, GapRoute, LoreMemo, SceneLength } from '../lib/api'
 
 export type PhaseId = 'vault' | 'compose' | 'generate' | 'theater'
 
@@ -24,6 +24,8 @@ export interface CompositionDraft {
   targetTone: CardTone | ''
   promptPresetId: string | null
   sceneLength: SceneLength | ''
+  /** おまかせの経路（'' = 直行の既定。detour = 寄り道） */
+  gapRoute: GapRoute | ''
   /** この作品で使うフォルダ（ルートは常時使用。選択はサブツリーを含む。空 = ルートのみ） */
   folderIds: string[]
   /** 背景設定メモ（作品の恒久設定 = canon）。清書時に全文注入される */
@@ -57,6 +59,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     targetTone: '',
     promptPresetId: null,
     sceneLength: '',
+    gapRoute: '',
     folderIds: [],
     lore: []
   })

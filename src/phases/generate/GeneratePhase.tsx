@@ -368,6 +368,7 @@ function GenerateInner() {
           workspace_id: workspaceId,
           prompt_preset_id: composition.promptPresetId,
           scene_length: composition.sceneLength || null,
+          gap_route: composition.gapRoute || null,
           include_images: uiSettings.generateIncludeImages && settings.supportsVision,
           include_bgm: uiSettings.theaterBgmEnabled,
           // 空配列も必ず送る（空 = ルートのみ。null にすると backend が「全カード」互換挙動になり、

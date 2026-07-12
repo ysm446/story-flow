@@ -37,6 +37,9 @@ class GenerateInput(BaseModel):
     workspace_id: str | None = None  # 生成元ワークスペース（story に紐付く）
     prompt_preset_id: str | None = None  # ワークスペースの清書プロンプト。無効/未指定なら既定側
     scene_length: Literal["short", "standard", "long"] | None = None  # シーンの目安の長さ
+    # おまかせの経路。None/direct = 直行（A→B 最短で橋渡し）、detour = 寄り道
+    # （連続おまかせで序盤は話を広げ、終盤で B へ収束させる）
+    gap_route: Literal["direct", "detour"] | None = None
     include_images: bool = False  # カードのメディアを writer に見せる（vision 対応モデル向け）
     include_bgm: bool = True  # BGM の自動選曲を有効にする（BGM 未登録なら実質無効）
     # おまかせの在庫を「ルート ∪ 指定フォルダのサブツリー」に絞る。
@@ -149,6 +152,7 @@ def generate_story(payload: GenerateInput) -> StreamingResponse:
                 system_prompt=system_prompt,
                 workspace_id=payload.workspace_id,
                 scene_length=payload.scene_length,
+                gap_route=payload.gap_route,
                 include_images=payload.include_images,
                 include_bgm=payload.include_bgm,
                 base_scenes=base_scenes,

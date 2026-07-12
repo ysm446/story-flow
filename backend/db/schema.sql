@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS workspaces (
   target_tone       TEXT CHECK(target_tone IN ('happy','bad','bitter','neutral') OR target_tone IS NULL),
   prompt_preset_id  TEXT,               -- NULL = 既定プロンプト
   scene_length      TEXT CHECK(scene_length IN ('short','standard','long') OR scene_length IS NULL),
+  gap_route         TEXT CHECK(gap_route IN ('direct','detour') OR gap_route IS NULL),
+                                                 -- おまかせの経路。NULL/direct = 直行（A→B 最短）、
+                                                 -- detour = 寄り道（広げてから B へ収束）
   folder_ids        TEXT NOT NULL DEFAULT '[]',  -- この作品で使うフォルダ ID の JSON 配列（ルートは常時使用）
   lore              TEXT NOT NULL DEFAULT '[]',  -- 背景設定メモの JSON 配列 [{"id","title","body"}]。
                                                  -- 恒久設定（canon）。清書時に全文注入（goals.md 設定資料 RAG の Phase 1）

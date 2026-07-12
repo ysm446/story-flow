@@ -32,6 +32,7 @@ def generate_stream(
     system_prompt: str,
     workspace_id: str | None = None,
     scene_length: str | None = None,
+    gap_route: str | None = None,
     include_images: bool = False,
     include_bgm: bool = True,
     base_scenes: list[dict] | None = None,
@@ -110,6 +111,7 @@ def generate_stream(
         if slot.get("kind") == "gap":
             # 穴埋め: 左から 1 枚ずつ確定（候補検索 → LLM 選択。まとめて選ばない）
             yield {"type": "selecting", "position": index, "total": total}
+            gap_position, gap_run_length = _gap_run_info(slots, index)
             card, selection_reason = fill_gap(
                 state,
                 prev_card,
@@ -121,6 +123,9 @@ def generate_stream(
                 base_url=selector_base_url,
                 plot=plot,
                 gaps_until_anchor=_gaps_until_anchor(slots, index),
+                route=gap_route or "direct",
+                gap_position=gap_position,
+                gap_run_length=gap_run_length,
             )
             yield {
                 "type": "selected",
@@ -206,6 +211,21 @@ def _gaps_until_anchor(slots: list[dict], index: int) -> int:
             break
         count += 1
     return count
+
+
+def _gap_run_info(slots: list[dict], index: int) -> tuple[int, int]:
+    """index が属する連続 gap 並びの（1 始まりの位置, 並びの長さ）。
+
+    寄り道ルート（gap_route=detour）が「序盤は広げる / 終盤は B へ収束」の行程を
+    selector に伝えるために使う。単独の穴は (1, 1)。
+    """
+    start = index
+    while start > 0 and slots[start - 1].get("kind") == "gap":
+        start -= 1
+    end = index
+    while end + 1 < len(slots) and slots[end + 1].get("kind") == "gap":
+        end += 1
+    return index - start + 1, end - start + 1
 
 
 def save_story(

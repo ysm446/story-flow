@@ -44,6 +44,8 @@ class WorkspaceUpdateInput(BaseModel):
     clear_prompt_preset: bool = False
     scene_length: Literal["short", "standard", "long"] | None = None
     clear_scene_length: bool = False
+    gap_route: Literal["direct", "detour"] | None = None  # おまかせの経路（NULL/direct = 直行、detour = 寄り道）
+    clear_gap_route: bool = False
     folder_ids: list[str] | None = None  # この作品で使うフォルダ（None = 変更なし。ルートは常時使用）
     lore: list[LoreMemo] | None = None  # 背景設定メモ（None = 変更なし）
 
@@ -140,6 +142,10 @@ def update_workspace(workspace_id: str, payload: WorkspaceUpdateInput) -> dict:
             scene_length = None
         else:
             scene_length = payload.scene_length if payload.scene_length is not None else current["scene_length"]
+        if payload.clear_gap_route:
+            gap_route = None
+        else:
+            gap_route = payload.gap_route if payload.gap_route is not None else current["gap_route"]
         folder_ids = (
             json.dumps(payload.folder_ids) if payload.folder_ids is not None else (current["folder_ids"] or "[]")
         )
@@ -150,8 +156,8 @@ def update_workspace(workspace_id: str, payload: WorkspaceUpdateInput) -> dict:
         )
         conn.execute(
             "UPDATE workspaces SET name = ?, graph = ?, plot = ?, target_tone = ?, prompt_preset_id = ?,"
-            " scene_length = ?, folder_ids = ?, lore = ?, updated_at = ? WHERE id = ?",
-            (name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, lore, _now(), workspace_id),
+            " scene_length = ?, gap_route = ?, folder_ids = ?, lore = ?, updated_at = ? WHERE id = ?",
+            (name, graph, plot, target_tone, prompt_preset_id, scene_length, gap_route, folder_ids, lore, _now(), workspace_id),
         )
         conn.commit()
         return _row_to_workspace(_get_row(conn, workspace_id))
@@ -168,9 +174,9 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
         now = _now()
         conn.execute(
             "INSERT INTO workspaces"
-            " (id, name, graph, plot, target_tone, prompt_preset_id, scene_length, folder_ids, lore,"
+            " (id, name, graph, plot, target_tone, prompt_preset_id, scene_length, gap_route, folder_ids, lore,"
             " created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 new_id,
                 payload.name.strip(),
@@ -179,6 +185,7 @@ def duplicate_workspace(workspace_id: str, payload: WorkspaceCreateInput) -> dic
                 source["target_tone"],
                 source["prompt_preset_id"],
                 source["scene_length"],
+                source["gap_route"],
                 source["folder_ids"] or "[]",
                 source["lore"] or "[]",
                 now,

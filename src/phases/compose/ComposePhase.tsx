@@ -27,6 +27,7 @@ import {
   type CardRole,
   type CardTone,
   type Folder,
+  type GapRoute,
   type PromptConfig,
   type SceneLength,
   type Workspace,
@@ -53,6 +54,11 @@ const TONE_OPTIONS: Array<{ value: CardTone | ''; label: string }> = [
   { value: 'bad', label: 'バッド' },
   { value: 'bitter', label: 'ビター' },
   { value: 'neutral', label: 'ニュートラル' }
+]
+
+const GAP_ROUTE_OPTIONS: Array<{ value: GapRoute | ''; label: string }> = [
+  { value: '', label: '直行（A から B へ最短で繋ぐ）' },
+  { value: 'detour', label: '寄り道（序盤は話を広げ、終盤で B へ収束）' }
 ]
 
 const SCENE_LENGTH_OPTIONS: Array<{ value: SceneLength | ''; label: string }> = [
@@ -341,6 +347,7 @@ function ComposeInner() {
         targetTone: workspace.target_tone ?? '',
         promptPresetId: workspace.prompt_preset_id,
         sceneLength: workspace.scene_length ?? '',
+        gapRoute: workspace.gap_route ?? '',
         folderIds: workspace.folder_ids ?? [],
         lore: workspace.lore ?? []
       })
@@ -478,7 +485,8 @@ function ComposeInner() {
         : { clear_prompt_preset: true }),
       ...(composition.sceneLength
         ? { scene_length: composition.sceneLength as SceneLength }
-        : { clear_scene_length: true })
+        : { clear_scene_length: true }),
+      ...(composition.gapRoute ? { gap_route: composition.gapRoute as GapRoute } : { clear_gap_route: true })
     }
   }, [nodes, edges, composition])
 
@@ -1283,6 +1291,23 @@ function ComposeInner() {
               className={inputClass}
             >
               {SCENE_LENGTH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] text-[var(--text-dim)]">
+              おまかせの経路（連続するおまかせスロットの進み方）
+            </span>
+            <select
+              value={composition.gapRoute}
+              onChange={(event) => setComposition({ ...composition, gapRoute: event.target.value as GapRoute | '' })}
+              className={inputClass}
+            >
+              {GAP_ROUTE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
